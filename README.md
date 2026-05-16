@@ -10,7 +10,7 @@ Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/koko
 
 **You only need the setup program.**
 
-1. Get **`ItTalksTTS-Setup.exe`** (from [Releases](https://github.com/YOUR_USER/ItTalksTTS/releases), or the **`release\`** folder after a maintainer build — open the zip and run the setup file at the top).
+1. Download **`ItTalksTTS-Setup.exe`** from **[GitHub Releases](https://github.com/DragonDumpling/ItTalksTTS/releases)** (Assets on the latest release — no need to clone the repo).
 2. **Double-click** it and follow the wizard (Next → Install → Finish).
 3. Launch **ItTalksTTS** from the desktop shortcut or Start menu (the installer can launch it for you).
 
