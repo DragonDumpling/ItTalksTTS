@@ -1,0 +1,19 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace ItTalksTTS.Core.Models;
+
+public partial class AppSettingsModel : ObservableObject
+{
+    [ObservableProperty] private string apiToken = "";
+
+    [ObservableProperty] private string selectedModel = "KokoroOnnx";
+
+    [ObservableProperty] private string selectedVoice = "af_sarah";
+
+    [ObservableProperty] private bool autoplay = true;
+
+    [ObservableProperty] private ObservableCollection<FilterRuleModel> filterRules = new();
+
+    [ObservableProperty] private int serviceLogMaxLines = 500;
+}

@@ -1,0 +1,165 @@
+﻿<Window x:Class="ItTalksTTS.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="clr-namespace:ItTalksTTS.Core.Models;assembly=ItTalksTTS.Core"
+        xmlns:controls="clr-namespace:ItTalksTTS.App.Controls"
+        mc:Ignorable="d"
+        Title="ItTalksTTS"
+        Height="720" Width="1100"
+        MinHeight="520" MinWidth="880"
+        Background="{DynamicResource Brush.Surface}"
+        Foreground="{DynamicResource Brush.Text}"
+        Loaded="MainWindow_OnLoaded">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    <Style x:Key="QueueCellStyle" TargetType="DataGridCell">
+      <Setter Property="Foreground" Value="#E4E4E4"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding State}" Value="{x:Static models:QueueItemState.Played}">
+          <Setter Property="Foreground" Value="#9A9A9A"/>
+        </DataTrigger>
+        <DataTrigger Binding="{Binding State}" Value="{x:Static models:QueueItemState.Error}">
+          <Setter Property="Foreground" Value="#FFB4B4"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style TargetType="DataGridRow">
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding State}" Value="{x:Static models:QueueItemState.Error}">
+          <Setter Property="Background" Value="#3A1F22"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+  <DockPanel Margin="10">
+    <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.Panel}" Padding="12" CornerRadius="6" Margin="0,0,0,8">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="ItTalksTTS" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}"/>
+        <TextBlock Text="  —  TTS bridge for Kokoro, Cursor hooks &amp; MCP"
+                   Foreground="{DynamicResource Brush.Subtitle}"
+                   VerticalAlignment="Center" Margin="12,0,0,0"/>
+      </StackPanel>
+    </Border>
+
+    <TabControl x:Name="RootTabs" Background="Transparent" BorderThickness="0" SelectionChanged="Tabs_SelectionChanged">
+      <TabItem Header="Voice">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Model" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <controls:ThemedComboBox Width="220" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+                                   SelectedValue="{Binding Settings.SelectedModel}" SelectedValuePath="Content"
+                                   IsEditable="True" IsReadOnly="True">
+              <ComboBoxItem Content="KokoroOnnx"/>
+            </controls:ThemedComboBox>
+            <TextBlock Text="Voice" VerticalAlignment="Center" Margin="16,0,8,0"/>
+            <controls:ThemedComboBox Width="200" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+                                     ItemsSource="{Binding Voices}" Text="{Binding Settings.SelectedVoice, UpdateSourceTrigger=PropertyChanged}" IsEditable="True"/>
+            <Button Content="Test voice" Command="{Binding TestVoiceCommand}" Margin="12,0,0,0" Padding="10,6" ToolTip="Speak a short thank-you line with the current voice"/>
+            <Ellipse Width="14" Height="14" Margin="20,0,8,0" Fill="{Binding VoiceStatusBrush}"/>
+            <TextBlock Text="{Binding VoiceStatusLabel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+          </StackPanel>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button Content="Start Kokoro" Command="{Binding StartKokoroCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Stop Kokoro" Command="{Binding StopKokoroCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Refresh voices" Command="{Binding PingWorkerCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Setup / Repair…" Command="{Binding OpenSetupCommand}" Padding="12,6"/>
+            <TextBlock Text="{Binding ApiListenInfo}" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>
+          </StackPanel>
+          <Border Grid.Row="2" Visibility="{Binding SetupRequired, Converter={StaticResource BoolToVis}}" Background="#2D2D1F" Padding="10" CornerRadius="4" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Models or worker missing. " VerticalAlignment="Center"/>
+              <Button Content="Run guided setup" Command="{Binding OpenSetupCommand}" Padding="10,4"/>
+            </StackPanel>
+          </Border>
+          <GroupBox Grid.Row="3" Header="Service log" Foreground="{DynamicResource Brush.Text}">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <ListBox Grid.Row="0" ItemsSource="{Binding Log.Lines}" FontFamily="Consolas" FontSize="11"
+                       Background="#1F1F22" BorderThickness="0" MinHeight="120"/>
+              <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <Button Content="Clear log" Command="{Binding ClearServiceLogCommand}" Margin="0,0,8,0" Padding="10,5"/>
+                <Button Content="Copy log" Command="{Binding CopyServiceLogCommand}" Padding="10,5"/>
+              </StackPanel>
+            </Grid>
+          </GroupBox>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="The Q">
+        <DockPanel Margin="8">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button x:Name="PlayPauseButton" Content="{Binding PlayPauseButtonLabel}" Command="{Binding TogglePlayPauseCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Stop" Command="{Binding StopPlaybackCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Play selected" Click="PlaySelected_Click" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Clear queue" Command="{Binding ClearQueueCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <CheckBox Content="Autoplay" IsChecked="{Binding Settings.Autoplay, Mode=TwoWay}" Checked="Autoplay_Changed" Unchecked="Autoplay_Changed" VerticalAlignment="Center" Margin="16,0,0,0"/>
+          </StackPanel>
+          <DataGrid x:Name="QueueGrid" ItemsSource="{Binding QueueItems}" AutoGenerateColumns="False" CanUserAddRows="False"
+                    SelectionMode="Extended" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Preview" Binding="{Binding Preview}" Width="*" CellStyle="{StaticResource QueueCellStyle}"/>
+              <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="120" CellStyle="{StaticResource QueueCellStyle}"/>
+              <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90" CellStyle="{StaticResource QueueCellStyle}"/>
+              <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="160" CellStyle="{StaticResource QueueCellStyle}"/>
+              <DataGridTemplateColumn Header="" Width="90" CellStyle="{StaticResource QueueCellStyle}">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Button Content="Up" Click="MoveUp_Click" Padding="6,2"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+      </TabItem>
+
+      <TabItem Header="The Paste">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <TextBox Grid.Row="0" Text="{Binding PasteText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
+                   TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="14" Padding="8"/>
+          <Button x:Name="AddToQButton" Grid.Row="1" Content="Add To Q" Command="{Binding AddPasteToQueueCommand}"
+                  HorizontalAlignment="Right" Margin="0,12,0,0" Padding="16,8"/>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Filters">
+        <DockPanel Margin="8">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="Add rule" Command="{Binding AddFilterRuleCommand}" Margin="0,0,8,0" Padding="10,5"/>
+            <Button Content="Preset: markdown noise" Command="{Binding AddPresetMarkdownCommand}" Margin="0,0,8,0" Padding="10,5"/>
+            <Button x:Name="SaveFiltersButton" Content="Save filters" Command="{Binding SaveFiltersCommand}" Padding="10,5"/>
+          </StackPanel>
+          <DataGrid ItemsSource="{Binding Settings.FilterRules}" AutoGenerateColumns="False" CanUserAddRows="True">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Strip / match" Binding="{Binding Match, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+              <DataGridTextColumn Header="Replace with (blank = remove)" Binding="{Binding Replacement, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+              <DataGridTemplateColumn Width="80">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Button Content="Del" Click="RemoveFilter_Click" Padding="6,2"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>
