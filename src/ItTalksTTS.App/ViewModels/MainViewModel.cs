@@ -23,6 +23,8 @@ public partial class MainViewModel : ObservableObject
 
     public ObservableCollection<string> Voices { get; } = new();
 
+    public string BuildLabel => AppBuildInfo.ShortLabel;
+
     [ObservableProperty] private string pasteText = "";
 
     [ObservableProperty] private string apiListenInfo = "";

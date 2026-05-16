@@ -161,5 +161,15 @@
         </DockPanel>
       </TabItem>
     </TabControl>
+
+    <TextBlock DockPanel.Dock="Bottom"
+               Text="{Binding BuildLabel}"
+               FontSize="9"
+               Foreground="{DynamicResource Brush.Subtitle}"
+               HorizontalAlignment="Right"
+               VerticalAlignment="Bottom"
+               Margin="0,6,2,0"
+               Opacity="0.65"
+               ToolTip="Build stamp (changes each compile)"/>
   </DockPanel>
 </Window>

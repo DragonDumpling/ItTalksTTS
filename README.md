@@ -5,11 +5,11 @@ Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/koko
 ## Features
 
 - **Voice** — Start/stop the Kokoro worker, pick model/voice, test speech, service log.
-- **The Q** — Queue lines with states (pending / playing / played / error), reorder, play/pause, play selected (including replay), autoplay chain, filters-ready pipeline.
+- **The Q** — Queue lines with states (pending / playing / played / error), reorder, play/pause, play selected (including replay), optional autoplay chain, filters-ready pipeline.
 - **The Paste** — Paste text, apply filter rules, enqueue.
 - **Filters** — Manage normalization rules persisted with settings.
-- **Local API** — `POST /v1/queue` with bearer auth; port and token in `%LocalAppData%\ItTalksTTS\runtime.json` / `settings.json` while the app runs.
-- **MCP** — `ItTalksTTS.McpServer` (stdio) calls the same API for `EnqueueTts` and status.
+- **Local API** — `POST /v1/queue` with bearer auth; port and token in `%LocalAppData%\ItTalksTTS\runtime.json` / `settings.json` while the app runs. **Enqueue only** — does not start audio by itself.
+- **MCP** (optional) — `ItTalksTTS.McpServer` (stdio) for on-demand `EnqueueTts` / `GetApiStatus`.
 
 ## Requirements
 
@@ -26,6 +26,23 @@ dotnet run --project .\src\ItTalksTTS.App\ItTalksTTS.App.csproj
 
 Release output: `src\ItTalksTTS.App\bin\Release\net9.0-windows\ItTalksTTS.exe`
 
+## Cursor → The Q (default: hooks)
+
+Each finished **Agent** assistant message can be **enqueued** automatically (source `cursor-hook`, state **Pending**). **Hooks do not play audio**; press **Play** in The Q (or enable **Autoplay**). **MCP is optional** and not required for hooks.
+
+**Full first-time setup (trusted workspace, `cmd.exe` launcher, UTF-8 stdin, Agent vs Ask, troubleshooting, mojibake in Hooks output):**
+
+**[docs/cursor-integration.md](docs/cursor-integration.md)**
+
+Quick checklist:
+
+1. Build/run **ItTalksTTS** (API must be up; see `%LocalAppData%\ItTalksTTS\runtime.json`).
+2. Open this repo in Cursor as a **trusted** workspace (folder containing `.cursor\hooks.json`).
+3. Use **Composer → Agent** (Ask-only chat may not run `afterAgentResponse`).
+4. Confirm **Output → Hooks**: `ittalks-hook: enqueued to The Q (...)` and a new row in **The Q**.
+
+Shipped hook files: [`.cursor/hooks.json`](.cursor/hooks.json) and **`ItTalksHookEnqueue.exe`** (built into `.cursor/hooks/` on `dotnet build`).
+
 ## Solution layout
 
 | Project | Role |
@@ -39,13 +56,9 @@ Release output: `src\ItTalksTTS.App\bin\Release\net9.0-windows\ItTalksTTS.exe`
 
 Python worker sources live under `tools\kokoro_worker\` (see that folder’s README).
 
-## Cursor, hooks, and MCP
-
-See **[docs/cursor-integration.md](docs/cursor-integration.md)** for `mcp.json`, hooks, PowerShell examples, and `/v1/health`.
-
 ## GitHub (private remote)
 
-The repo is initialized locally with `master` as the default branch. To create a **private** GitHub repository and push (after [installing](https://cli.github.com/) and signing in to the GitHub CLI):
+To create a **private** GitHub repository and push (after [GitHub CLI](https://cli.github.com/) is on your `PATH` or use the full path to `gh.exe`, then `gh auth login`):
 
 ```powershell
 cd path\to\ItTalksTTS
@@ -53,7 +66,7 @@ gh auth login
 gh repo create ItTalksTTS --private --source=. --remote=origin --push --description "WPF Kokoro TTS bridge: queue, local API, MCP for Cursor"
 ```
 
-If `origin` already exists, use `gh repo create ItTalksTTS --private --push` after setting the remote, or remove the old remote first. Non-interactive automation can use a `GH_TOKEN` with `repo` scope instead of `gh auth login`.
+If `origin` already exists, adjust remote or repo name. Non-interactive setups can use `GH_TOKEN` with `repo` scope.
 
 ## License
 

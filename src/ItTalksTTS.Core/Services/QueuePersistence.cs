@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using ItTalksTTS.Core.Models;
 
@@ -15,7 +16,10 @@ public static class QueuePersistence
     {
         AppPaths.EnsureRoot();
         var list = items.ToList();
-        File.WriteAllText(AppPaths.QueuePersistencePath, JsonSerializer.Serialize(list, JsonOptions));
+        File.WriteAllText(
+            AppPaths.QueuePersistencePath,
+            JsonSerializer.Serialize(list, JsonOptions),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
     public static List<QueueItemModel> Load()
@@ -24,7 +28,7 @@ public static class QueuePersistence
             return [];
         try
         {
-            var json = File.ReadAllText(AppPaths.QueuePersistencePath);
+            var json = File.ReadAllText(AppPaths.QueuePersistencePath, Encoding.UTF8);
             return JsonSerializer.Deserialize<List<QueueItemModel>>(json, JsonOptions) ?? [];
         }
         catch

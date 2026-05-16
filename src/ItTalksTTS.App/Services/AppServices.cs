@@ -1,5 +1,6 @@
 using System.IO;
 using System.Threading;
+using System.Windows;
 using ItTalksTTS.Api;
 using ItTalksTTS.Core;
 using ItTalksTTS.Core.Models;
@@ -34,7 +35,20 @@ public sealed class AppServices
         Kokoro = new KokoroWorkerSupervisor(LogLine);
         Setup = new KokoroSetupService(LogLine);
         Playback = new PlaybackService(this, LogLine);
-        Api = new LocalApiServer(Queue, () => Settings, SettingsStore);
+        Api = new LocalApiServer(Queue, () => Settings, SettingsStore, OnItemEnqueuedViaApi);
+    }
+
+    private void OnItemEnqueuedViaApi(Guid id)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+            return;
+        _ = dispatcher.InvokeAsync(async () =>
+        {
+            if (!Settings.Autoplay || Playback.IsPlaying)
+                return;
+            await Playback.TryAutoplayChainAsync().ConfigureAwait(true);
+        });
     }
 
     public void Initialize()

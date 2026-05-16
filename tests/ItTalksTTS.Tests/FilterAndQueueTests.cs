@@ -1,7 +1,47 @@
+using System.Text;
 using ItTalksTTS.Core.Models;
 using ItTalksTTS.Core.Services;
 
 namespace ItTalksTTS.Tests;
+
+public class TextEncodingHelperTests
+{
+    [Fact]
+    public void RepairUtf8Mojibake_fixes_latin1_misread_utf8()
+    {
+        Assert.Equal("café naïve", TextEncodingHelper.RepairUtf8Mojibake("cafÃ© naÃ¯ve"));
+
+        var dashMojibake = Encoding.GetEncoding(1252).GetString(Encoding.UTF8.GetBytes("—"));
+        var repairedDash = TextEncodingHelper.RepairUtf8Mojibake("it's fine " + dashMojibake + " dash");
+        Assert.DoesNotContain('Ã', repairedDash);
+        Assert.DoesNotContain("â€", repairedDash);
+    }
+
+    [Fact]
+    public void RepairUtf8Mojibake_leaves_clean_text_unchanged()
+    {
+        const string ok = "Plain ASCII and café — already correct";
+        Assert.Equal(ok, TextEncodingHelper.RepairUtf8Mojibake(ok));
+    }
+
+    [Fact]
+    public void DecodeHookStdin_reads_utf16_le_json()
+    {
+        var json = "{\"text\":\"café — ok\"}";
+        var bytes = Encoding.Unicode.GetBytes(json);
+        var decoded = TextEncodingHelper.DecodeHookStdin(bytes);
+        Assert.Contains("café", decoded);
+        Assert.DoesNotContain('\uFFFD', decoded);
+    }
+
+    [Fact]
+    public void PrepareForQueue_normalizes_smart_punctuation()
+    {
+        var input = "it\u2019s \u201Csmart\u201D \u2014 dash";
+        var prepared = TextEncodingHelper.PrepareForQueue(input);
+        Assert.Equal("it's \"smart\" - dash", prepared);
+    }
+}
 
 public class FilterEngineTests
 {

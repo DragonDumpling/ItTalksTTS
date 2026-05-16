@@ -9,6 +9,9 @@ dist/
 .build-verify/
 .build-verify2/
 **/ItTalksTTS.Tests/TestResults/
+.cursor/hooks/ItTalksHookEnqueue.exe
+.cursor/hooks/ItTalksHookEnqueue.dll
+.cursor/hooks/ItTalksHookEnqueue.pdb
 .env
 .env.*
 *.pfx

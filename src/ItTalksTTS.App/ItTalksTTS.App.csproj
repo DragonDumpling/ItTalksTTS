@@ -8,7 +8,26 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>ItTalksTTS.App</RootNamespace>
     <AssemblyName>ItTalksTTS</AssemblyName>
+    <Version>1.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+
+  <Target Name="StampBuildLabel" BeforeTargets="GetAssemblyVersion">
+    <PropertyGroup>
+      <_BuildStamp>$([System.DateTime]::Now.ToString("MMdd.HHmm"))</_BuildStamp>
+      <InformationalVersion>$(Version)+$(_BuildStamp)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="PublishCursorHook" AfterTargets="Build">
+    <PropertyGroup>
+      <_HookOutDir>$(MSBuildThisFileDirectory)..\..\.cursor\hooks\</_HookOutDir>
+    </PropertyGroup>
+    <Exec
+      Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\ItTalksTTS.HookEnqueue\ItTalksTTS.HookEnqueue.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -p:PublishSingleFile=true -o &quot;$(_HookOutDir)&quot;"
+      StandardOutputImportance="low"
+      StandardErrorImportance="high" />
+  </Target>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -23,6 +42,7 @@
     <ProjectReference Include="..\ItTalksTTS.Api\ItTalksTTS.Api.csproj" />
     <ProjectReference Include="..\ItTalksTTS.Core\ItTalksTTS.Core.csproj" />
     <ProjectReference Include="..\ItTalksTTS.Tts\ItTalksTTS.Tts.csproj" />
+    <ProjectReference Include="..\ItTalksTTS.HookEnqueue\ItTalksTTS.HookEnqueue.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

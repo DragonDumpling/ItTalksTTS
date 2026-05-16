@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ItTalksTTS.Core.Models;
@@ -22,16 +23,27 @@ public sealed class EnqueueRequestDto
 
 public sealed class LocalApiServer : IAsyncDisposable
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private WebApplication? _app;
     private readonly QueueManager _queue;
     private readonly Func<AppSettingsModel> _settingsFactory;
     private readonly SettingsStore _store;
+    private readonly Action<Guid>? _onEnqueued;
 
-    public LocalApiServer(QueueManager queue, Func<AppSettingsModel> settingsFactory, SettingsStore store)
+    public LocalApiServer(
+        QueueManager queue,
+        Func<AppSettingsModel> settingsFactory,
+        SettingsStore store,
+        Action<Guid>? onEnqueued = null)
     {
         _queue = queue;
         _settingsFactory = settingsFactory;
         _store = store;
+        _onEnqueued = onEnqueued;
     }
 
     public int Port { get; private set; }
@@ -65,11 +77,10 @@ public sealed class LocalApiServer : IAsyncDisposable
         EnqueueRequestDto? body;
         try
         {
-            body = await ctx.Request
-                .ReadFromJsonAsync<EnqueueRequestDto>(
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
-                    ctx.RequestAborted)
-                .ConfigureAwait(false);
+            using var ms = new MemoryStream();
+            await ctx.Request.Body.CopyToAsync(ms, ctx.RequestAborted).ConfigureAwait(false);
+            var json = Encoding.UTF8.GetString(ms.ToArray());
+            body = JsonSerializer.Deserialize<EnqueueRequestDto>(json, JsonOptions);
         }
         catch
         {
@@ -78,12 +89,22 @@ public sealed class LocalApiServer : IAsyncDisposable
 
         if (body is null || string.IsNullOrWhiteSpace(body.Text))
             return Results.BadRequest();
+        body.Text = TextEncodingHelper.PrepareForQueue(body.Text);
         var settings = _settingsFactory();
         var filtered = FilterEngine.Apply(body.Text, settings.FilterRules);
         if (string.IsNullOrWhiteSpace(filtered))
             return Results.BadRequest("empty after filters");
         var source = string.IsNullOrWhiteSpace(body.Source) ? "API" : body.Source!;
         var id = _queue.Enqueue(filtered, source);
+        try
+        {
+            _onEnqueued?.Invoke(id);
+        }
+        catch
+        {
+            /* ignore callback failures */
+        }
+
         return Results.Json(new { id });
     }
 
