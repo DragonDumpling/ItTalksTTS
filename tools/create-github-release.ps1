@@ -29,9 +29,9 @@ $headers = @{
 $notes = @"
 Windows 64-bit installer.
 
-- Download ItTalksTTS-Setup.exe below and run it.
+- Download **ItTalksTTS-Setup.exe** (or **ItTalksTTS-Windows.zip**) and run the setup.
 - First launch downloads Kokoro voice models (internet required).
-- No need to clone this repo or install .NET/Python separately.
+- **Cursor:** user hooks install automatically — restart Cursor, use Agent mode in any project (no repo clone).
 "@
 
 $releaseBody = @{

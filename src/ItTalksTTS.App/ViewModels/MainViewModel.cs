@@ -37,6 +37,8 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private bool isKokoroRunning;
 
+    [ObservableProperty] private string cursorHooksStatus = "";
+
     public MainViewModel(Window owner, AppServices svc)
     {
         _owner = owner;
@@ -44,6 +46,7 @@ public partial class MainViewModel : ObservableObject
         _svc.Playback.ClipFinished += OnClipFinished;
         _svc.Playback.PlaybackStateChanged += OnPlaybackStateChanged;
         RefreshSetupGate();
+        RefreshCursorHooksStatus();
         _ = RefreshVoicesInternalAsync();
     }
 
@@ -244,6 +247,50 @@ public partial class MainViewModel : ObservableObject
         dlg.ShowDialog();
         RefreshSetupGate();
         await RefreshVoicesInternalAsync().ConfigureAwait(true);
+    }
+
+    public void EnsureCursorHooksInstalled()
+    {
+        if (CursorHookInstaller.IsConfigured())
+        {
+            RefreshCursorHooksStatus();
+            return;
+        }
+
+        var (ok, msg) = CursorHookInstaller.Install();
+        _svc.Log.Append(msg);
+        RefreshCursorHooksStatus();
+        if (ok)
+            SfxService.PlaySuccess();
+    }
+
+    [RelayCommand]
+    private void InstallCursorHooks() => EnsureCursorHooksInstalled();
+
+    [RelayCommand]
+    private void OpenCursorHooksFolder()
+    {
+        try
+        {
+            var dir = CursorHookInstaller.CursorDirectory;
+            Directory.CreateDirectory(dir);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = dir,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _svc.Log.Append("Open .cursor folder failed: " + ex.Message);
+        }
+    }
+
+    private void RefreshCursorHooksStatus()
+    {
+        CursorHooksStatus = CursorHookInstaller.IsConfigured()
+            ? "Cursor hooks: on (all projects — use Agent mode)"
+            : "Cursor hooks: click Install to enqueue Agent replies to The Q";
     }
 
     private void RefreshVoiceStatus()

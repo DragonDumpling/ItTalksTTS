@@ -72,6 +72,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -88,20 +89,31 @@
             <Ellipse Width="14" Height="14" Margin="20,0,8,0" Fill="{Binding VoiceStatusBrush}"/>
             <TextBlock Text="{Binding VoiceStatusLabel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
           </StackPanel>
-          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
             <Button Content="Start Kokoro" Command="{Binding StartKokoroCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Stop Kokoro" Command="{Binding StopKokoroCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Refresh voices" Command="{Binding PingWorkerCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Setup / Repair…" Command="{Binding OpenSetupCommand}" Padding="12,6"/>
             <TextBlock Text="{Binding ApiListenInfo}" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>
           </StackPanel>
-          <Border Grid.Row="2" Visibility="{Binding SetupRequired, Converter={StaticResource BoolToVis}}" Background="#2D2D1F" Padding="10" CornerRadius="4" Margin="0,0,0,8">
+          <Border Grid.Row="2" Background="#252528" Padding="10,8" CornerRadius="4" Margin="0,0,0,8">
+            <StackPanel>
+              <TextBlock Text="{Binding CursorHooksStatus}" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>
+              <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <Button Content="Install / repair Cursor hooks" Command="{Binding InstallCursorHooksCommand}" Padding="10,5" Margin="0,0,8,0"
+                        ToolTip="Writes ~/.cursor/hooks.json — works in any folder, no repo clone"/>
+                <Button Content="Open .cursor folder" Command="{Binding OpenCursorHooksFolderCommand}" Padding="10,5"
+                        ToolTip="Show hooks.json location in Explorer"/>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="3" Visibility="{Binding SetupRequired, Converter={StaticResource BoolToVis}}" Background="#2D2D1F" Padding="10" CornerRadius="4" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Models or worker missing. " VerticalAlignment="Center"/>
               <Button Content="Run guided setup" Command="{Binding OpenSetupCommand}" Padding="10,4"/>
             </StackPanel>
           </Border>
-          <GroupBox Grid.Row="3" Header="Service log" Foreground="{DynamicResource Brush.Text}">
+          <GroupBox Grid.Row="4" Header="Service log" Foreground="{DynamicResource Brush.Text}">
             <Grid>
               <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>

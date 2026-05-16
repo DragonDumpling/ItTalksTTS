@@ -1,75 +1,31 @@
-# Cursor integration (hooks default, MCP optional)
+# Cursor integration (hooks — no repo clone)
 
-ItTalksTTS exposes a **local HTTP API** while the desktop app is running. **`POST /v1/queue` only adds a row to The Q** (pending). It does **not** start playback unless **Autoplay** is enabled in **The Q** and nothing is already playing.
+ItTalksTTS can enqueue each finished **Agent** reply to **The Q** automatically. **You do not need to clone this repository or open it in Cursor.**
 
-Playback otherwise requires **Play** / **Play selected** in the app (and **Kokoro** running on the Voice tab).
+## End-user setup (after `ItTalksTTS-Setup.exe`)
 
-**MCP is not required for hooks.** Hooks call the HTTP API via **`ItTalksHookEnqueue.exe`**. MCP is optional when you want the model to call **`EnqueueTts`** on demand.
+1. Install from [GitHub Releases](https://github.com/DragonDumpling/ItTalksTTS/releases/latest).
+2. Run **ItTalksTTS** at least once (tray/app running — local API must be up).
+3. The installer (and the app on first launch) installs **user-level Cursor hooks** under your home folder:
+   - `%USERPROFILE%\.cursor\hooks.json`
+   - `%USERPROFILE%\.cursor\hooks\ItTalksHookEnqueue.exe`
+4. **Restart Cursor** if it was already open (so it reloads hooks).
+5. Open **any** project in Cursor (your own code — not this repo).
+6. Use **Agent** mode, finish a reply → row in **The Q** with source `cursor-hook`.
 
----
+That is the entire Cursor setup. No `git clone`, no trusted workspace requirement for this repo.
 
-## First-time setup (new machine or new teammate)
+### If hooks are missing
 
-Do these steps in order. The repo ships [`.cursor/hooks.json`](../.cursor/hooks.json). After **`dotnet build`**, [`.cursor/hooks/ItTalksHookEnqueue.exe`](../.cursor/hooks/ItTalksHookEnqueue.exe) is published automatically (gitignored; required).
+In ItTalksTTS → **Voice** tab → **Install / repair Cursor hooks**, then restart Cursor.
 
-### 1. Prerequisites
-
-- **Windows**
-- **ItTalksTTS** installed ([README](../README.md) — double-click **`ItTalksTTS-Setup.exe`**, finish first-run setup) **or** built from source
-- **Cursor** with **Hooks** ([Cursor hooks docs](https://cursor.com/docs/hooks))
-- This **git repo** open in Cursor (for `.cursor/hooks.json` and a built hook exe)
-
-### 2. Run ItTalksTTS
-
-Leave the desktop app running. First launch runs Kokoro setup automatically if models are missing.
-
-**Cursor hooks** still require building this repo once (publishes `.cursor\hooks\ItTalksHookEnqueue.exe`):
-
-```powershell
-cd path\to\ItTalksTTS
-dotnet build .\ItTalksTTS.sln -c Release
-```
-
-| File | Purpose |
-|------|---------|
-| `%LocalAppData%\ItTalksTTS\runtime.json` | API **port** while the app runs |
-| `%LocalAppData%\ItTalksTTS\settings.json` | **`apiToken`** for `Authorization: Bearer ...` |
-
-### 3. Open the repo in Cursor (trusted workspace)
-
-1. **File → Open Folder** → ItTalksTTS repo root (contains `.cursor\hooks.json`).
-2. Mark the workspace **trusted** (project hooks do not run in untrusted workspaces).
-3. Reload hooks (save `hooks.json` or restart Cursor).
-
-To use hooks in **another** project, copy `.cursor\hooks.json` into that repo and either copy a built `ItTalksHookEnqueue.exe` into `.cursor\hooks\` or use a path that points at this repo’s exe (hooks always `cd` to `%CURSOR_PROJECT_DIR%` first).
-
-### 4. Confirm hooks are loaded
-
-1. Cursor **Settings** → **Hooks**, or **Output** → **Hooks** channel.
-2. You should see **`afterAgentResponse`** calling:
+Or re-run silently:
 
 ```text
-cmd.exe /S /C "cd /d %CURSOR_PROJECT_DIR% && .cursor\hooks\ItTalksHookEnqueue.exe"
+"C:\Program Files\ItTalksTTS\ItTalksTTS.exe" /installCursorHooks
 ```
 
-**Do not** put `$env:CURSOR_PROJECT_DIR` in the `hooks.json` **command** string. Some Cursor builds expand it to a bare path and break the launcher.
-
-**Do not** use the legacy script `.cursor/hooks/ittalks-enqueue-response.ps1` (encoding issues).
-
-### 5. Use Agent-style chat (not Ask-only)
-
-`afterAgentResponse` applies to **Agent** / agent-style Composer flows. Plain **Ask** may not fire the hook.
-
-1. Open **Composer** in **Agent** mode.
-2. Send a message and wait for the full reply.
-3. **ItTalksTTS → The Q** — new row, source **`cursor-hook`**, state **Pending**.
-4. **Output → Hooks** — `ittalks-hook: enqueued to The Q (N chars)`.
-
-Press **Play** (or enable **Autoplay**) to hear it.
-
-### 6. Optional: MCP
-
-Skip for automatic “every reply → The Q”. See [MCP (optional)](#mcp-optional) below.
+(Adjust path if you installed elsewhere.)
 
 ---
 
@@ -77,85 +33,39 @@ Skip for automatic “every reply → The Q”. See [MCP (optional)](#mcp-option
 
 | Step | What happens |
 |------|----------------|
-| 1 | Cursor finishes an assistant message (Agent mode). |
-| 2 | **`afterAgentResponse`** runs the command in `.cursor/hooks.json`. |
-| 3 | `cmd.exe` `cd`s to `%CURSOR_PROJECT_DIR%`, runs **`.cursor\hooks\ItTalksHookEnqueue.exe`**. |
-| 4 | Hook reads stdin (UTF-16 LE on Windows is detected; otherwise UTF-8), parses JSON field **`text`**. |
-| 5 | **POST** UTF-8 JSON to `http://127.0.0.1:<port>/v1/queue` with `source: "cursor-hook"`. |
-| 6 | API runs **`PrepareForQueue`** (mojibake repair + typography normalization), **Filters**, enqueues **Pending**. |
-| 7 | If **Autoplay** is on and playback is idle, the next item starts (same as paste/API from UI). |
+| 1 | Cursor finishes an Agent message. |
+| 2 | **User hook** `afterAgentResponse` runs `~/.cursor/hooks/ItTalksHookEnqueue.exe`. |
+| 3 | Hook POSTs to `http://127.0.0.1:<port>/v1/queue` (reads `%LocalAppData%\ItTalksTTS\`). |
+| 4 | App enqueues **Pending**; **Play** or **Autoplay** in The Q plays audio. |
 
-### Hook input (Cursor)
+Hooks apply to **all projects** on this machine (user hooks). Project-only hooks in a git repo are optional for developers contributing to ItTalksTTS itself.
 
-```json
-{
-  "text": "<assistant final text>",
-  "hook_event_name": "afterAgentResponse",
-  "workspace_roots": ["F:\\Projects\\ItTalksTTS"]
-}
-```
+---
 
-### Manual API test (PowerShell)
+## Playback
 
-```powershell
-$rt = Get-Content "$env:LOCALAPPDATA\ItTalksTTS\runtime.json" | ConvertFrom-Json
-$settings = Get-Content "$env:LOCALAPPDATA\ItTalksTTS\settings.json" | ConvertFrom-Json
-$body = @{ text = "Hello — café test."; source = "manual-test" } | ConvertTo-Json -Compress
-$bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
-Invoke-RestMethod -Uri "http://127.0.0.1:$($rt.port)/v1/queue" -Method Post `
-  -Body $bytes -ContentType "application/json; charset=utf-8" `
-  -Headers @{ Authorization = "Bearer $($settings.apiToken)" }
-```
+- **Autoplay off** (default for many users): hooks enqueue only; press **Play** in The Q.
+- **Autoplay on**: next pending item may start when idle.
+- **Kokoro** must be started on the Voice tab to hear speech.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | What to check |
-|--------|----------------|
-| Nothing in The Q | App running? **Trusted** workspace? **Agent** mode? **Output → Hooks** errors. |
-| `FileNotFoundException: System.Runtime` | Rebuild app so **self-contained** `ItTalksHookEnqueue.exe` is republished under `.cursor\hooks\`. |
-| PowerShell parse errors (`-not f:\...`) | Use **`%CURSOR_PROJECT_DIR%`** via `cmd.exe` in `hooks.json` (see this repo). |
-| `runtime.json missing` | Start **ItTalksTTS** before chatting. |
-| `` or `?` where em dash / smart quotes should be | Rebuild app + hook (UTF-16 stdin decode + `PrepareForQueue`). Do not use legacy PowerShell hook. |
-| `itâ€™s` / `cafÃ©` in **The Q** | Same as above; old mojibake path. |
-| Garbled text only in **Hooks output** panel | Often log encoding (`â€"` for `—`); ignore if enqueue succeeded. |
-| Row in Q, no sound | **Start Kokoro**; press **Play** or enable **Autoplay**. |
-| Hook works from repo, not another folder | That project needs its own `.cursor\hooks.json` + `ItTalksHookEnqueue.exe` (or open ItTalksTTS repo). |
-
-### Text encoding (The Q)
-
-The hook and API normalize text before enqueue:
-
-- **Stdin:** Windows Cursor often sends **UTF-16 LE**; the hook detects `{` + `0x00` and decodes correctly.
-- **Queue text:** `PrepareForQueue` repairs UTF-8 mojibake and maps curly quotes / em dashes to ASCII-friendly forms for display and TTS.
+| Symptom | Fix |
+|--------|-----|
+| Nothing in The Q | ItTalksTTS running? **Agent** mode (not Ask-only)? **Output → Hooks** for errors. |
+| Hooks not listed in Cursor | Restart Cursor; confirm `%USERPROFILE%\.cursor\hooks.json` exists; click **Install / repair** in the app. |
+| `runtime.json missing` | Start ItTalksTTS. |
+| Garbled text in The Q | Reinstall app; use current hook exe from install folder. |
 
 ---
 
 ## MCP (optional)
 
-Use when the **model** should call **`EnqueueTts`** or **`GetApiStatus`**.
+Not required for automatic enqueue. Use `ItTalksTTS.McpServer.exe` from the install folder only if you want the **model** to call `EnqueueTts` on demand.
 
-Build:
-
-```powershell
-dotnet build .\src\ItTalksTTS.McpServer\ItTalksTTS.McpServer.csproj -c Release
-```
-
-**mcp.json** example (dev build):
-
-```json
-{
-  "mcpServers": {
-    "ittalks-tts": {
-      "command": "F:\\Projects\\ItTalksTTS\\src\\ItTalksTTS.McpServer\\bin\\Release\\net9.0\\ItTalksTTS.McpServer.exe",
-      "args": []
-    }
-  }
-}
-```
-
-After **installer** install:
+Example `mcp.json`:
 
 ```json
 {
@@ -168,12 +78,14 @@ After **installer** install:
 }
 ```
 
-**Tools:** `EnqueueTts` (enqueue only), `GetApiStatus` (port / runtime file).
+---
 
-**Start ItTalksTTS** before using MCP.
+## Developers (this repository)
+
+If you work on ItTalksTTS itself, the repo still has [`.cursor/hooks.json`](../.cursor/hooks.json) for **project** hooks when this folder is open. End users should rely on **user hooks** installed by the app/installer, not on cloning the repo.
 
 ---
 
-## Health check (no auth)
+## Health check
 
 `GET http://127.0.0.1:<port>/v1/health` → `{ "status": "ok" }`

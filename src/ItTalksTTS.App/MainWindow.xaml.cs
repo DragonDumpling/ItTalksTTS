@@ -58,6 +58,7 @@ public partial class MainWindow : Window
         Vm.ApiListenInfo = $"POST http://127.0.0.1:{p}/v1/queue  —  Authorization: Bearer {preview}";
         _tabSoundReady = true;
         await Vm.RunFirstLaunchSetupIfNeededAsync().ConfigureAwait(true);
+        Vm.EnsureCursorHooksInstalled();
     }
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)

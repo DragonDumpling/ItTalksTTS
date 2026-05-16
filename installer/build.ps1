@@ -17,6 +17,12 @@ dotnet publish (Join-Path $root "src\ItTalksTTS.App\ItTalksTTS.App.csproj") `
 Write-Host "Bundling embedded Python (for end-user install, no separate Python needed)..."
 & (Join-Path $root "tools\bundle-python-embed.ps1") -DestDir $embedDir
 
+Write-Host "Publishing Cursor hook (user-level, ships beside app)..."
+dotnet publish (Join-Path $root "src\ItTalksTTS.HookEnqueue\ItTalksTTS.HookEnqueue.csproj") `
+    -c Release -r win-x64 --self-contained true `
+    -p:PublishSingleFile=true `
+    -o $publishApp
+
 Write-Host "Publishing MCP server..."
 dotnet publish (Join-Path $root "src\ItTalksTTS.McpServer\ItTalksTTS.McpServer.csproj") `
     -c Release -r win-x64 --self-contained true `

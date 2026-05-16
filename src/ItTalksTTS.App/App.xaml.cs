@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using ItTalksTTS.App.Services;
+using ItTalksTTS.Core.Services;
 
 namespace ItTalksTTS.App;
 
@@ -16,6 +17,16 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (e.Args.Any(a => string.Equals(a, "/installCursorHooks", StringComparison.OrdinalIgnoreCase)))
+        {
+            Services.Initialize();
+            var (ok, msg) = CursorHookInstaller.Install();
+            Services.Log.Append(msg);
+            Shutdown(ok ? 0 : 1);
+            return;
+        }
+
         Services.Initialize();
         try
         {

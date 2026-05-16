@@ -21,7 +21,7 @@ Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/koko
 | You want… | Do this |
 |-----------|---------|
 | Hear queued text | **The Q** → **Play** (or enable **Autoplay**) |
-| Cursor Agent → queue | See [Cursor integration](#cursor-integration) (separate from the Windows installer) |
+| Cursor Agent → queue | Install setup, run app once, restart Cursor — [details](#cursor-integration) |
 
 ---
 
@@ -39,7 +39,11 @@ Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/koko
 
 ## Cursor integration
 
-Hooks are **not** configured by the Windows installer. Developers open this repo in Cursor (trusted workspace) after building once so `.cursor\hooks\ItTalksHookEnqueue.exe` exists.
+The installer configures **user-level** Cursor hooks (`~/.cursor/hooks.json`) so Agent replies enqueue to The Q from **any project** — no clone of this repo.
+
+1. Install **ItTalksTTS-Setup.exe** and run the app once.
+2. Restart Cursor.
+3. Use **Agent** mode in your own codebase.
 
 **Guide:** [docs/cursor-integration.md](docs/cursor-integration.md)
 
