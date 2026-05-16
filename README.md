@@ -1,73 +1,102 @@
+<p align="center">
+  <img src="src/ItTalksTTS.App/Assets/ittalks-logo.png" alt="ItTalksTTS logo" width="280"/>
+</p>
+
 # ItTalksTTS
 
-Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/kokoro-onnx)** text-to-speech (Python ONNX worker), a **playback queue**, a **local HTTP API**, and an **MCP** host for tools like Cursor.
+Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/kokoro-onnx)** text-to-speech, a **playback queue (The Q)**, a **local HTTP API**, and optional **Cursor** hooks / MCP.
+
+## Install
+
+**You only need the setup program.**
+
+1. Get **`ItTalksTTS-Setup.exe`** (from [Releases](https://github.com/YOUR_USER/ItTalksTTS/releases) or `dist\` after someone builds the installer).
+2. **Double-click** it and follow the wizard (Next → Install → Finish).
+3. Launch **ItTalksTTS** from the desktop shortcut or Start menu (the installer can launch it for you).
+
+**First launch:** the app opens a one-time setup window automatically. It installs Kokoro’s Python pieces and downloads voice models over the internet (often a few minutes). You do not need to install Python or .NET separately when using the setup EXE.
+
+**Then:** use the app — paste or enqueue text, press **Play** in **The Q** (or turn on **Autoplay**). On the **Voice** tab, **Start Kokoro** if you want speech right away after setup.
+
+| You want… | Do this |
+|-----------|---------|
+| Hear queued text | **The Q** → **Play** (or enable **Autoplay**) |
+| Cursor Agent → queue | See [Cursor integration](#cursor-integration) (separate from the Windows installer) |
+
+---
 
 ## Features
 
-- **Voice** — Start/stop the Kokoro worker, pick model/voice, test speech, service log.
-- **The Q** — Queue lines with states (pending / playing / played / error), reorder, play/pause, play selected (including replay), optional autoplay chain, filters-ready pipeline.
-- **The Paste** — Paste text, apply filter rules, enqueue.
-- **Filters** — Manage normalization rules persisted with settings.
-- **Local API** — `POST /v1/queue` with bearer auth; port and token in `%LocalAppData%\ItTalksTTS\runtime.json` / `settings.json` while the app runs. **Enqueue only** — does not start audio by itself.
-- **MCP** (optional) — `ItTalksTTS.McpServer` (stdio) for on-demand `EnqueueTts` / `GetApiStatus`.
+- **Voice** — Kokoro worker, voices, test line, service log.
+- **The Q** — Queue, play/pause, replay, reorder, Autoplay.
+- **The Paste** — Paste, filter, enqueue.
+- **Filters** — Persistent normalization rules.
+- **Local API** — `POST /v1/queue` (bearer token while the app runs).
+- **Cursor hooks** — Agent replies → The Q (`cursor-hook`).
+- **MCP** (optional) — `EnqueueTts`, `GetApiStatus`.
 
-## Requirements
+---
 
-- **Windows** (WPF / `net9.0-windows`)
-- **[.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)**
+## Cursor integration
 
-## Build & run
+Hooks are **not** configured by the Windows installer. Developers open this repo in Cursor (trusted workspace) after building once so `.cursor\hooks\ItTalksHookEnqueue.exe` exists.
+
+**Guide:** [docs/cursor-integration.md](docs/cursor-integration.md)
+
+---
+
+## For developers (build from source)
+
+**Requirements:** Windows, [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
 
 ```powershell
 cd path\to\ItTalksTTS
 dotnet build .\ItTalksTTS.sln -c Release
-dotnet run --project .\src\ItTalksTTS.App\ItTalksTTS.App.csproj
+.\src\ItTalksTTS.App\bin\Release\net9.0-windows\ItTalksTTS.exe
 ```
 
-Release output: `src\ItTalksTTS.App\bin\Release\net9.0-windows\ItTalksTTS.exe`
+First run still auto-downloads Kokoro models; use **Python 3.10+** on PATH unless you published with embedded Python (installer build does).
 
-## Cursor → The Q (default: hooks)
+### Build the Windows installer (maintainers)
 
-Each finished **Agent** assistant message can be **enqueued** automatically (source `cursor-hook`, state **Pending**). **Hooks do not play audio**; press **Play** in The Q (or enable **Autoplay**). **MCP is optional** and not required for hooks.
+Needs .NET 9 SDK + [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
-**Full first-time setup (trusted workspace, `cmd.exe` launcher, UTF-8 stdin, Agent vs Ask, troubleshooting, mojibake in Hooks output):**
+```powershell
+.\installer\build.ps1
+```
 
-**[docs/cursor-integration.md](docs/cursor-integration.md)**
+Ship **`dist\ItTalksTTS-Setup.exe`** to users. That script publishes the app (self-contained + embedded Python + Kokoro worker scripts) and compiles the installer.
 
-Quick checklist:
+### App icon
 
-1. Build/run **ItTalksTTS** (API must be up; see `%LocalAppData%\ItTalksTTS\runtime.json`).
-2. Open this repo in Cursor as a **trusted** workspace (folder containing `.cursor\hooks.json`).
-3. Use **Composer → Agent** (Ask-only chat may not run `afterAgentResponse`).
-4. Confirm **Output → Hooks**: `ittalks-hook: enqueued to The Q (...)` and a new row in **The Q**.
+`ittalks-logo-rgb.png` (master, may be RGB on black) → `ittalks-logo.png` (32-bit alpha for the app). After replacing the master:
 
-Shipped hook files: [`.cursor/hooks.json`](.cursor/hooks.json) and **`ItTalksHookEnqueue.exe`** (built into `.cursor/hooks/` on `dotnet build`).
+```powershell
+.\tools\rgb-logo-to-alpha.ps1 -SourcePath .\src\ItTalksTTS.App\Assets\ittalks-logo-rgb.png -DestPath .\src\ItTalksTTS.App\Assets\ittalks-logo.png
+.\tools\png-to-ico.ps1 -PngPath .\src\ItTalksTTS.App\Assets\ittalks-logo.png -IcoPath .\src\ItTalksTTS.App\Assets\ittalks.ico
+```
 
-## Solution layout
+### Solution layout
 
 | Project | Role |
 |--------|------|
-| `ItTalksTTS.App` | WPF UI, playback (NAudio), API host, worker supervision |
-| `ItTalksTTS.Core` | Queue models, persistence, filter engine |
-| `ItTalksTTS.Tts` | Kokoro process / protocol |
-| `ItTalksTTS.Api` | Shared API contracts / helpers |
-| `ItTalksTTS.McpServer` | MCP stdio server (enqueue + status) |
+| `ItTalksTTS.App` | WPF UI, playback, API host |
+| `ItTalksTTS.Core` | Queue, persistence, filters, encoding |
+| `ItTalksTTS.Tts` | Kokoro worker / setup |
+| `ItTalksTTS.Api` | Local HTTP API |
+| `ItTalksTTS.HookEnqueue` | Cursor hook → API |
+| `ItTalksTTS.McpServer` | MCP stdio server |
 | `ItTalksTTS.Tests` | Unit tests |
 
-Python worker sources live under `tools\kokoro_worker\` (see that folder’s README).
+### Data locations
 
-## GitHub (private remote)
-
-To create a **private** GitHub repository and push (after [GitHub CLI](https://cli.github.com/) is on your `PATH` or use the full path to `gh.exe`, then `gh auth login`):
-
-```powershell
-cd path\to\ItTalksTTS
-gh auth login
-gh repo create ItTalksTTS --private --source=. --remote=origin --push --description "WPF Kokoro TTS bridge: queue, local API, MCP for Cursor"
-```
-
-If `origin` already exists, adjust remote or repo name. Non-interactive setups can use `GH_TOKEN` with `repo` scope.
+| Path | Purpose |
+|------|---------|
+| `%LocalAppData%\ItTalksTTS\settings.json` | Voice, filters, API token, Autoplay |
+| `%LocalAppData%\ItTalksTTS\runtime.json` | API port (while running) |
+| `%LocalAppData%\ItTalksTTS\models\` | Kokoro ONNX + voices |
+| `%LocalAppData%\ItTalksTTS\queue.json` | Saved queue |
 
 ## License
 
-No license file is bundled in this repository; default copyright applies unless you add one.
+No license file is bundled; default copyright applies unless you add one.

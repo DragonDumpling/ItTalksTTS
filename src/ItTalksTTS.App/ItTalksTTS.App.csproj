@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>ItTalksTTS.App</RootNamespace>
     <AssemblyName>ItTalksTTS</AssemblyName>
+    <ApplicationIcon>Assets\ittalks.ico</ApplicationIcon>
     <Version>1.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
@@ -43,6 +44,11 @@
     <ProjectReference Include="..\ItTalksTTS.Core\ItTalksTTS.Core.csproj" />
     <ProjectReference Include="..\ItTalksTTS.Tts\ItTalksTTS.Tts.csproj" />
     <ProjectReference Include="..\ItTalksTTS.HookEnqueue\ItTalksTTS.HookEnqueue.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\ittalks.ico" />
+    <Resource Include="Assets\ittalks-logo.png" />
   </ItemGroup>
 
   <ItemGroup>

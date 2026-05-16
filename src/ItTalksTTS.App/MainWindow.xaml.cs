@@ -50,13 +50,14 @@ public partial class MainWindow : Window
             SfxService.PlayButton();
     }
 
-    private void MainWindow_OnLoaded(object sender, RoutedEventArgs e)
+    private async void MainWindow_OnLoaded(object sender, RoutedEventArgs e)
     {
         var p = App.Services.Api.Port;
         var tok = App.Services.Settings.ApiToken;
         var preview = tok.Length > 10 ? tok[..10] + "…" : tok;
         Vm.ApiListenInfo = $"POST http://127.0.0.1:{p}/v1/queue  —  Authorization: Bearer {preview}";
         _tabSoundReady = true;
+        await Vm.RunFirstLaunchSetupIfNeededAsync().ConfigureAwait(true);
     }
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)

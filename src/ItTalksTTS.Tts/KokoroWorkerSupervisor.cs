@@ -33,9 +33,25 @@ public sealed class KokoroWorkerSupervisor : IDisposable
             var venv = Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe");
             if (File.Exists(venv))
                 return venv;
+            if (File.Exists(AppPaths.BundledPythonExe)
+                && File.Exists(Path.Combine(AppPaths.PythonPackages, ".ittalks-ready")))
+                return AppPaths.BundledPythonExe;
         }
 
-        return "python";
+        return File.Exists(AppPaths.BundledPythonExe) ? AppPaths.BundledPythonExe : "python";
+    }
+
+    private static void ApplyPythonPath(ProcessStartInfo psi)
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var venv = Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe");
+        if (File.Exists(venv))
+            return;
+        var marker = Path.Combine(AppPaths.PythonPackages, ".ittalks-ready");
+        if (!File.Exists(marker))
+            return;
+        psi.Environment["PYTHONPATH"] = AppPaths.PythonPackages;
     }
 
     public string ResolveWorkerScript()
@@ -76,6 +92,7 @@ public sealed class KokoroWorkerSupervisor : IDisposable
             WorkingDirectory = Path.GetDirectoryName(script) ?? AppPaths.Root
         };
         psi.ArgumentList.Add(script);
+        ApplyPythonPath(psi);
         psi.Environment["KOKORO_MODEL"] = AppPaths.KokoroOnnx;
         psi.Environment["KOKORO_VOICES"] = AppPaths.KokoroVoices;
 

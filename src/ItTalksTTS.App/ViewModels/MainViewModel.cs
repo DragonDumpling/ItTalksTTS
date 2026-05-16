@@ -230,7 +230,20 @@ public partial class MainViewModel : ObservableObject
     {
         var hasModel = File.Exists(AppPaths.KokoroOnnx) && File.Exists(AppPaths.KokoroVoices);
         var hasWorker = File.Exists(_svc.Kokoro.ResolveWorkerScript());
-        SetupRequired = !(hasModel && hasWorker);
+        var hasPython = File.Exists(Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe"))
+            || File.Exists(Path.Combine(AppPaths.PythonPackages, ".ittalks-ready"));
+        SetupRequired = !(hasModel && hasWorker && hasPython);
+    }
+
+    public async Task RunFirstLaunchSetupIfNeededAsync()
+    {
+        RefreshSetupGate();
+        if (!SetupRequired)
+            return;
+        var dlg = new SetupWindow(_svc) { Owner = _owner, AutoRunOnShown = true };
+        dlg.ShowDialog();
+        RefreshSetupGate();
+        await RefreshVoicesInternalAsync().ConfigureAwait(true);
     }
 
     private void RefreshVoiceStatus()

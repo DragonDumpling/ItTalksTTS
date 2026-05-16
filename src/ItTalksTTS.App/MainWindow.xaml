@@ -7,6 +7,7 @@
         xmlns:controls="clr-namespace:ItTalksTTS.App.Controls"
         mc:Ignorable="d"
         Title="ItTalksTTS"
+        Icon="pack://application:,,,/Assets/ittalks.ico"
         Height="720" Width="1100"
         MinHeight="520" MinWidth="880"
         Background="{DynamicResource Brush.Surface}"
@@ -35,13 +36,33 @@
     </Style>
   </Window.Resources>
   <DockPanel Margin="10">
-    <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.Panel}" Padding="12" CornerRadius="6" Margin="0,0,0,8">
-      <StackPanel Orientation="Horizontal">
-        <TextBlock Text="ItTalksTTS" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text}"/>
-        <TextBlock Text="  —  TTS bridge for Kokoro, Cursor hooks &amp; MCP"
-                   Foreground="{DynamicResource Brush.Subtitle}"
-                   VerticalAlignment="Center" Margin="12,0,0,0"/>
-      </StackPanel>
+    <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.Panel}" Padding="14,12" CornerRadius="6" Margin="0,0,0,8">
+      <Grid VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Image Grid.Column="0"
+               Height="52"
+               Margin="0,0,16,0"
+               Stretch="Uniform"
+               VerticalAlignment="Center"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               ToolTip="ItTalksTTS">
+          <Image.Source>
+            <BitmapImage UriSource="pack://application:,,,/Assets/ittalks-logo.png"
+                         DecodePixelHeight="104"
+                         CacheOption="OnLoad"/>
+          </Image.Source>
+        </Image>
+        <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
+          <TextBlock Text="ItTalksTTS" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource Brush.Text}"/>
+          <TextBlock Text="TTS bridge for Kokoro, Cursor hooks &amp; MCP"
+                     Foreground="{DynamicResource Brush.Subtitle}"
+                     FontSize="13"
+                     Margin="0,2,0,0"/>
+        </StackPanel>
+      </Grid>
     </Border>
 
     <TabControl x:Name="RootTabs" Background="Transparent" BorderThickness="0" SelectionChanged="Tabs_SelectionChanged">

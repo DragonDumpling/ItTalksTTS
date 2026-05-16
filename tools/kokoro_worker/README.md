@@ -2,7 +2,7 @@
 
 Placed under `%LocalAppData%\ItTalksTTS\kokoro_worker` by setup, or run from repo for development.
 
-Requires `kokoro-v1.0.onnx` and `voices-v1.0.bin` (see ItTalks in-app Setup).
+Requires `kokoro-v1.0.onnx` and `voices-v1.0.bin` (download via **ItTalksTTS** → Voice → **Setup / Repair…**).
 
 ```bash
 pip install -r requirements.txt

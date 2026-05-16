@@ -7,6 +7,9 @@ namespace ItTalksTTS.App.Views;
 public partial class SetupWindow : Window
 {
     private readonly AppServices _svc;
+    private bool _isRunning;
+
+    public bool AutoRunOnShown { get; set; }
 
     public SetupWindow(AppServices svc)
     {
@@ -14,9 +17,25 @@ public partial class SetupWindow : Window
         _svc = svc;
     }
 
-    private async void Run_Click(object sender, RoutedEventArgs e)
+    protected override async void OnContentRendered(EventArgs e)
     {
+        base.OnContentRendered(e);
+        if (!AutoRunOnShown || _isRunning)
+            return;
+        AutoRunOnShown = false;
+        await RunSetupCoreAsync().ConfigureAwait(true);
+    }
+
+    private async void Run_Click(object sender, RoutedEventArgs e) =>
+        await RunSetupCoreAsync().ConfigureAwait(true);
+
+    private async Task RunSetupCoreAsync()
+    {
+        if (_isRunning)
+            return;
+        _isRunning = true;
         RunBtn.IsEnabled = false;
+        CancelBtn.Content = "Please wait…";
         CancelBtn.IsEnabled = false;
         Progress.IsIndeterminate = false;
         Progress.Value = 0;
@@ -36,7 +55,7 @@ public partial class SetupWindow : Window
                     Progress.Value = f * 100;
             });
             await setup.RunSetupAsync(progress, CancellationToken.None).ConfigureAwait(true);
-            Status.Text = "Setup complete.";
+            Status.Text = "Setup complete. You can close this window.";
             Progress.Value = 100;
             SfxService.PlaySuccess();
         }
@@ -47,7 +66,9 @@ public partial class SetupWindow : Window
         }
         finally
         {
+            _isRunning = false;
             RunBtn.IsEnabled = true;
+            CancelBtn.Content = "Close";
             CancelBtn.IsEnabled = true;
         }
     }

@@ -23,12 +23,20 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
+SetupIconFile=..\src\ItTalksTTS.App\Assets\ittalks.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+
+[CustomMessages]
+english.FirstRunNote=On first launch, ItTalksTTS will download Kokoro voice models automatically (internet required). This may take a few minutes.
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
+
+[Messages]
+english.WelcomeLabel2=This will install [name/ver] on your computer.%n%n%english.FirstRunNote%
 
 [Files]
 Source: "{#PublishRoot}\App\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

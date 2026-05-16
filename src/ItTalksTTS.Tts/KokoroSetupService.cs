@@ -5,6 +5,7 @@ namespace ItTalksTTS.Tts;
 
 public sealed class KokoroSetupService
 {
+    private const string PackagesReadyMarker = ".ittalks-ready";
     private readonly Action<string> _log;
 
     public KokoroSetupService(Action<string> log) => _log = log;
@@ -15,8 +16,8 @@ public sealed class KokoroSetupService
         Directory.CreateDirectory(AppPaths.ModelsDir);
         Directory.CreateDirectory(Path.Combine(AppPaths.Root, "python"));
 
-        progress?.Report(("Preparing Python venv…", 0.05));
-        await EnsureVenvAndPackagesAsync(cancellationToken).ConfigureAwait(false);
+        progress?.Report(("Preparing Python…", 0.05));
+        await EnsurePythonPackagesAsync(cancellationToken).ConfigureAwait(false);
 
         progress?.Report(("Downloading Kokoro ONNX model…", 0.2));
         await DownloadIfMissingAsync(
@@ -61,8 +62,23 @@ public sealed class KokoroSetupService
         return null;
     }
 
-    private async Task EnsureVenvAndPackagesAsync(CancellationToken cancellationToken)
+    private async Task EnsurePythonPackagesAsync(CancellationToken cancellationToken)
     {
+        DeployWorkerFiles();
+        var reqPath = Path.Combine(AppPaths.WorkerDir, "requirements.txt");
+        if (!File.Exists(reqPath))
+            throw new InvalidOperationException($"Missing {reqPath}");
+
+        if (File.Exists(AppPaths.BundledPythonExe))
+        {
+            await EnsureBundledPipAsync(cancellationToken).ConfigureAwait(false);
+            Directory.CreateDirectory(AppPaths.PythonPackages);
+            await PipInstallAsync(AppPaths.BundledPythonExe, reqPath, AppPaths.PythonPackages, cancellationToken)
+                .ConfigureAwait(false);
+            File.WriteAllText(Path.Combine(AppPaths.PythonPackages, PackagesReadyMarker), DateTime.UtcNow.ToString("O"));
+            return;
+        }
+
         if (!Directory.Exists(AppPaths.PythonVenv))
         {
             var create = new ProcessStartInfo
@@ -81,10 +97,9 @@ public sealed class KokoroSetupService
 
         var pip = Path.Combine(AppPaths.PythonVenv, "Scripts", "pip.exe");
         if (!File.Exists(pip))
-            throw new InvalidOperationException("pip not found in venv. Install Python 3.10+ from python.org and ensure `python` is on PATH.");
+            throw new InvalidOperationException(
+                "pip not found. Install Python 3.10+ from python.org, or use the ItTalksTTS Windows installer (includes Python).");
 
-        DeployWorkerFiles();
-        var reqPath = Path.Combine(AppPaths.WorkerDir, "requirements.txt");
         var install = new ProcessStartInfo
         {
             FileName = pip,
@@ -96,6 +111,67 @@ public sealed class KokoroSetupService
         install.ArgumentList.Add("install");
         install.ArgumentList.Add("-r");
         install.ArgumentList.Add(reqPath);
+        await RunProcessAsync(install, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task EnsureBundledPipAsync(CancellationToken cancellationToken)
+    {
+        var probe = new ProcessStartInfo
+        {
+            FileName = AppPaths.BundledPythonExe,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        probe.ArgumentList.Add("-m");
+        probe.ArgumentList.Add("pip");
+        probe.ArgumentList.Add("--version");
+        try
+        {
+            await RunProcessAsync(probe, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        catch
+        {
+            /* install pip */
+        }
+
+        var getPip = Path.Combine(Path.GetDirectoryName(AppPaths.BundledPythonExe)!, "get-pip.py");
+        if (!File.Exists(getPip))
+            throw new InvalidOperationException($"Missing {getPip} next to bundled Python.");
+
+        var bootstrap = new ProcessStartInfo
+        {
+            FileName = AppPaths.BundledPythonExe,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        bootstrap.ArgumentList.Add(getPip);
+        bootstrap.ArgumentList.Add("--no-warn-script-location");
+        await RunProcessAsync(bootstrap, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PipInstallAsync(string pythonExe, string requirements, string targetDir, CancellationToken cancellationToken)
+    {
+        var install = new ProcessStartInfo
+        {
+            FileName = pythonExe,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        install.ArgumentList.Add("-m");
+        install.ArgumentList.Add("pip");
+        install.ArgumentList.Add("install");
+        install.ArgumentList.Add("-r");
+        install.ArgumentList.Add(requirements);
+        install.ArgumentList.Add("--target");
+        install.ArgumentList.Add(targetDir);
+        install.ArgumentList.Add("--upgrade");
         await RunProcessAsync(install, cancellationToken).ConfigureAwait(false);
     }
 
@@ -130,7 +206,7 @@ public sealed class KokoroSetupService
             return;
         }
 
-        using var http = new HttpClient();
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
         await using var s = await http.GetStreamAsync(url, cancellationToken).ConfigureAwait(false);
         var tmp = dest + ".tmp";
         await using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))

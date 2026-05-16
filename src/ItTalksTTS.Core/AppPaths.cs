@@ -7,6 +7,12 @@ public static class AppPaths
 
     public static string PythonVenv => Path.Combine(Root, "python", "venv");
 
+    public static string PythonPackages => Path.Combine(Root, "python", "packages");
+
+    /// <summary>Shipped with the installer under the app folder (embeddable CPython).</summary>
+    public static string BundledPythonExe =>
+        Path.Combine(AppContext.BaseDirectory, "python-embed", "python.exe");
+
     public static string ModelsDir => Path.Combine(Root, "models");
 
     public static string KokoroOnnx => Path.Combine(ModelsDir, "kokoro-v1.0.onnx");
