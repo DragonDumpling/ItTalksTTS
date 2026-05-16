@@ -10,7 +10,7 @@ Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/koko
 
 **You only need the setup program.**
 
-1. Get **`ItTalksTTS-Setup.exe`** (from [Releases](https://github.com/YOUR_USER/ItTalksTTS/releases) or `dist\` after someone builds the installer).
+1. Get **`ItTalksTTS-Setup.exe`** (from [Releases](https://github.com/YOUR_USER/ItTalksTTS/releases), or the **`release\`** folder after a maintainer build — open the zip and run the setup file at the top).
 2. **Double-click** it and follow the wizard (Next → Install → Finish).
 3. Launch **ItTalksTTS** from the desktop shortcut or Start menu (the installer can launch it for you).
 
@@ -65,7 +65,7 @@ Needs .NET 9 SDK + [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 .\installer\build.ps1
 ```
 
-Ship **`dist\ItTalksTTS-Setup.exe`** to users. That script publishes the app (self-contained + embedded Python + Kokoro worker scripts) and compiles the installer.
+Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip the `release` folder for download so the setup file is obvious at the top level. The script publishes the app (self-contained + embedded Python + Kokoro worker scripts) and compiles the installer.
 
 ### App icon
 

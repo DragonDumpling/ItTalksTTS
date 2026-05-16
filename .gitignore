@@ -4,7 +4,8 @@
 *.user
 *.suo
 publish/
-dist/
+release/*
+!release/README.txt
 *.log
 .build-verify/
 .build-verify2/

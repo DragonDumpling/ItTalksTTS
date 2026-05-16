@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $publishApp = Join-Path $root "publish\App"
 $publishMcp = Join-Path $root "publish\Mcp"
-$dist = Join-Path $root "dist"
+$release = Join-Path $root "release"
 $embedDir = Join-Path $publishApp "python-embed"
 
 Write-Host "Publishing app..."
@@ -36,10 +36,13 @@ if (-not $isccPath) {
     throw "Inno Setup 6 not found. Install from https://jrsoftware.org/isinfo.php (winget install JRSoftware.InnoSetup)."
 }
 
-New-Item -ItemType Directory -Force -Path $dist | Out-Null
+New-Item -ItemType Directory -Force -Path $release | Out-Null
 Write-Host "Compiling installer..."
 & $isccPath (Join-Path $PSScriptRoot "ittalks.iss")
 
+$setup = Join-Path $release "ItTalksTTS-Setup.exe"
 Write-Host ""
-Write-Host "Done. Give users this file:"
-Write-Host "  $dist\ItTalksTTS-Setup.exe"
+Write-Host "Done. Installer:"
+Write-Host "  $setup"
+Write-Host ""
+Write-Host "Zip the release folder for download (Setup.exe at the top level of the zip)."
