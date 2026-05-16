@@ -5,6 +5,7 @@
 # ItTalksTTS
 
 Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/kokoro-onnx)** text-to-speech, a **playback queue (The Q)**, a **local HTTP API**, and optional **Cursor** hooks / MCP.
+TLDR, This uses the Open Source Kokoro Text To Speach service to make TTA avaiable for you via Cursor Hooks or you an paste any text into it to have it read out loud for you, free open source and runs locally. 
 
 ## Install
 
