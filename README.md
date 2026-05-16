@@ -103,4 +103,4 @@ Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip th
 
 ## License
 
-No license file is bundled; default copyright applies unless you add one.
+[MIT](LICENSE)
