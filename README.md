@@ -43,6 +43,18 @@ Python worker sources live under `tools\kokoro_worker\` (see that folder’s REA
 
 See **[docs/cursor-integration.md](docs/cursor-integration.md)** for `mcp.json`, hooks, PowerShell examples, and `/v1/health`.
 
+## GitHub (private remote)
+
+The repo is initialized locally with `master` as the default branch. To create a **private** GitHub repository and push (after [installing](https://cli.github.com/) and signing in to the GitHub CLI):
+
+```powershell
+cd path\to\ItTalksTTS
+gh auth login
+gh repo create ItTalksTTS --private --source=. --remote=origin --push --description "WPF Kokoro TTS bridge: queue, local API, MCP for Cursor"
+```
+
+If `origin` already exists, use `gh repo create ItTalksTTS --private --push` after setting the remote, or remove the old remote first. Non-interactive automation can use a `GH_TOKEN` with `repo` scope instead of `gh auth login`.
+
 ## License
 
 No license file is bundled in this repository; default copyright applies unless you add one.
