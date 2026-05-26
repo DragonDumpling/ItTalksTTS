@@ -5,7 +5,30 @@
 # ItTalksTTS
 
 Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/kokoro-onnx)** text-to-speech, a **playback queue (The Q)**, a **local HTTP API**, and optional **Cursor** hooks / MCP.
-TLDR, This uses the Open Source Kokoro Text To Speach service to make TTA avaiable for you via Cursor Hooks or you an paste any text into it to have it read out loud for you, free open source and runs locally. 
+
+TLDR: This uses the open-source Kokoro text-to-speech engine to read text aloud locally — free, open source, and private. Queue Agent replies from Cursor hooks, paste anything into **The Paste**, or POST to the local API.
+
+## See it in action
+
+### Video walkthrough
+
+<video src="docs/media/ItTalksTTS_rundown.mp4" controls width="100%">
+  Your browser does not support embedded video. <a href="docs/media/ItTalksTTS_rundown.mp4">Download the rundown video</a>.
+</video>
+
+### Screenshots
+
+**Voice** — start Kokoro, pick a voice, install Cursor hooks, and watch the service log.
+
+<img src="docs/media/voice-tab.png" alt="ItTalksTTS Voice tab with Kokoro controls and Cursor hooks" width="900"/>
+
+**The Q** — playback queue with Autoplay, copy/send-to-paste, and full text preview for selected rows.
+
+<img src="docs/media/the-q.png" alt="ItTalksTTS queue tab with pending and played items" width="900"/>
+
+**The Paste** — type or paste text and add it to the queue (filters apply before enqueue).
+
+<img src="docs/media/the-paste.png" alt="ItTalksTTS Paste tab for manual text entry" width="900"/>
 
 ## Install
 
