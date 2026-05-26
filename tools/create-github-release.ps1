@@ -29,9 +29,9 @@ $headers = @{
 $notes = @"
 ## What's new in 0.1.2
 
-- **In-app updates** — update button downloads and installs the latest release automatically
-- **The Q improvements** — copy text, send to Paste, error handling fixes, autoplay continues from selected item
-- **Cursor hooks** — fixed duplicate enqueue when user + project hooks both ran
+- **In-app updates** - update button downloads and installs the latest release automatically
+- **The Q improvements** - copy text, send to Paste, error handling fixes, autoplay continues from selected item
+- **Cursor hooks** - fixed duplicate enqueue when user + project hooks both ran
 
 ## Install
 
@@ -45,11 +45,13 @@ $releaseBody = @{
     name     = $Title
     body     = $notes
     draft    = $false
-} | ConvertTo-Json
+} | ConvertTo-Json -Depth 5
+
+$releaseBytes = [System.Text.Encoding]::UTF8.GetBytes($releaseBody)
 
 $releaseUrl = "https://api.github.com/repos/$Owner/$Repo/releases"
 try {
-    $release = Invoke-RestMethod -Uri $releaseUrl -Method Post -Headers $headers -Body $releaseBody -ContentType "application/json"
+    $release = Invoke-RestMethod -Uri $releaseUrl -Method Post -Headers $headers -Body $releaseBytes -ContentType "application/json; charset=utf-8"
 }
 catch {
     if ($_.ErrorDetails.Message -match "already_exists") {
@@ -70,6 +72,8 @@ function Upload-Asset([string]$path, [string]$label) {
 }
 
 Upload-Asset $setup "installer"
+$zip = Join-Path $root "release\ItTalksTTS-Windows.zip"
+if (Test-Path $zip) { Upload-Asset $zip "zip" }
 if (Test-Path $readme) { Upload-Asset $readme "readme" }
 
 Write-Host ""
