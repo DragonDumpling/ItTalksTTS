@@ -137,14 +137,38 @@
             <Button Content="Stop" Command="{Binding StopPlaybackCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Play selected" Click="PlaySelected_Click" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Clear queue" Command="{Binding ClearQueueCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Copy text" Command="{Binding CopySelectedQueueTextCommand}" Margin="0,0,8,0" Padding="12,6"
+                    ToolTip="Copy full text of selected row(s) to the clipboard"/>
+            <Button Content="To Paste" Command="{Binding SendSelectedToPasteCommand}" Margin="0,0,8,0" Padding="12,6"
+                    ToolTip="Send selected text to The Paste tab for editing"/>
             <CheckBox Content="Autoplay" IsChecked="{Binding Settings.Autoplay, Mode=TwoWay}" Checked="Autoplay_Changed" Unchecked="Autoplay_Changed" VerticalAlignment="Center" Margin="16,0,0,0"/>
           </StackPanel>
+          <Border DockPanel.Dock="Bottom" Background="#252528" Padding="8" CornerRadius="4" Margin="0,8,0,0">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <TextBlock Grid.Row="0" Text="Selected text (select and copy, or use buttons above)" Foreground="{DynamicResource Brush.Subtitle}" FontSize="11" Margin="0,0,0,4"/>
+              <TextBox Grid.Row="1" Text="{Binding SelectedQueueText, Mode=OneWay}" IsReadOnly="True"
+                       AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                       MinHeight="72" MaxHeight="160" FontSize="12" Padding="6"
+                       Background="#1F1F22" BorderThickness="0"/>
+            </Grid>
+          </Border>
           <DataGrid x:Name="QueueGrid" ItemsSource="{Binding QueueItems}" AutoGenerateColumns="False" CanUserAddRows="False"
-                    SelectionMode="Extended" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                    SelectionMode="Extended" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                    SelectionChanged="QueueGrid_SelectionChanged">
             <DataGrid.Columns>
               <DataGridTextColumn Header="Preview" Binding="{Binding Preview}" Width="*" CellStyle="{StaticResource QueueCellStyle}"/>
               <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="120" CellStyle="{StaticResource QueueCellStyle}"/>
-              <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90" CellStyle="{StaticResource QueueCellStyle}"/>
+              <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90" CellStyle="{StaticResource QueueCellStyle}">
+                <DataGridTextColumn.ElementStyle>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="ToolTip" Value="{Binding ErrorMessage}"/>
+                  </Style>
+                </DataGridTextColumn.ElementStyle>
+              </DataGridTextColumn>
               <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="160" CellStyle="{StaticResource QueueCellStyle}"/>
               <DataGridTemplateColumn Header="" Width="90" CellStyle="{StaticResource QueueCellStyle}">
                 <DataGridTemplateColumn.CellTemplate>
@@ -195,14 +219,21 @@
       </TabItem>
     </TabControl>
 
-    <TextBlock DockPanel.Dock="Bottom"
-               Text="{Binding BuildLabel}"
-               FontSize="9"
-               Foreground="{DynamicResource Brush.Subtitle}"
-               HorizontalAlignment="Right"
-               VerticalAlignment="Bottom"
-               Margin="0,6,2,0"
-               Opacity="0.65"
-               ToolTip="Build stamp (changes each compile)"/>
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,2,0">
+      <Button x:Name="UpdateAvailableButton"
+              Content="{Binding UpdateAvailableLabel}"
+              Command="{Binding ApplyUpdateCommand}"
+              Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}"
+              Margin="0,0,10,0"
+              Padding="8,3"
+              FontSize="10"
+              ToolTip="Download and install the latest release"/>
+      <TextBlock Text="{Binding BuildLabel}"
+                 FontSize="9"
+                 Foreground="{DynamicResource Brush.Subtitle}"
+                 VerticalAlignment="Center"
+                 Opacity="0.65"
+                 ToolTip="Build stamp (changes each compile)"/>
+    </StackPanel>
   </DockPanel>
 </Window>

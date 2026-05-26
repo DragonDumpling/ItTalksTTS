@@ -1,11 +1,4 @@
 {
   "version": 1,
-  "hooks": {
-    "afterAgentResponse": [
-      {
-        "command": "cmd.exe /S /C \"cd /d %CURSOR_PROJECT_DIR% && .cursor\\hooks\\ItTalksHookEnqueue.exe\"",
-        "timeout": 25
-      }
-    ]
-  }
+  "hooks": {}
 }

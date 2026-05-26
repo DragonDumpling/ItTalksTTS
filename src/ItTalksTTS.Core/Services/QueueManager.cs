@@ -17,10 +17,14 @@ public sealed class QueueManager
         {
             Items.Clear();
             foreach (var item in QueuePersistence.Load())
+            {
+                TryRepairKokoroNotRunningError(item);
                 Items.Add(item);
+            }
         }
 
         Changed?.Invoke();
+        SaveToDisk();
     }
 
     public void SaveToDisk()
@@ -49,6 +53,21 @@ public sealed class QueueManager
         Changed?.Invoke();
         SaveToDisk();
         return item.Id;
+    }
+
+    public bool HasRecentDuplicate(string text, string source, TimeSpan window)
+    {
+        if (window <= TimeSpan.Zero)
+            return false;
+
+        lock (SyncRoot)
+        {
+            var cutoff = DateTimeOffset.Now - window;
+            return Items.Any(i =>
+                string.Equals(i.Text, text, StringComparison.Ordinal)
+                && string.Equals(i.Source, source, StringComparison.Ordinal)
+                && i.CreatedAt >= cutoff);
+        }
     }
 
     public void Clear()
@@ -116,6 +135,32 @@ public sealed class QueueManager
         }
     }
 
+    public QueueItemModel? NextPendingAfter(Guid afterId)
+    {
+        lock (SyncRoot)
+        {
+            var idx = -1;
+            for (var i = 0; i < Items.Count; i++)
+            {
+                if (Items[i].Id != afterId)
+                    continue;
+                idx = i;
+                break;
+            }
+
+            if (idx < 0)
+                return null;
+
+            for (var i = idx + 1; i < Items.Count; i++)
+            {
+                if (Items[i].State == QueueItemState.Pending)
+                    return Items[i];
+            }
+
+            return null;
+        }
+    }
+
     public QueueItemModel? FirstError()
     {
         lock (SyncRoot)
@@ -152,5 +197,16 @@ public sealed class QueueManager
 
         Changed?.Invoke();
         SaveToDisk();
+    }
+
+    /// <summary>Resets items that failed only because Kokoro was stopped (not a synthesis failure).</summary>
+    public static bool TryRepairKokoroNotRunningError(QueueItemModel item)
+    {
+        if (item.State != QueueItemState.Error
+            || !string.Equals(item.ErrorMessage, "Kokoro worker not running.", StringComparison.Ordinal))
+            return false;
+        item.State = QueueItemState.Pending;
+        item.ErrorMessage = null;
+        return true;
     }
 }

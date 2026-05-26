@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         var vm = new MainViewModel(this, App.Services);
         DataContext = vm;
+        vm.RequestPasteTab += () => RootTabs.SelectedIndex = 2;
         BindingOperations.EnableCollectionSynchronization(App.Services.Queue.Items, App.Services.Queue.SyncRoot);
         BindingOperations.EnableCollectionSynchronization(App.Services.Log.Lines, App.Services.Log.SyncRoot);
     }
@@ -43,6 +44,8 @@ public partial class MainWindow : Window
         if (e.OriginalSource is not Button btn)
             return;
         if (btn.Name == "AddToQButton")
+            return;
+        if (btn.Name == "UpdateAvailableButton")
             return;
         if (btn.Name == "SaveFiltersButton")
             SfxService.PlaySuccess();
@@ -59,6 +62,7 @@ public partial class MainWindow : Window
         _tabSoundReady = true;
         await Vm.RunFirstLaunchSetupIfNeededAsync().ConfigureAwait(true);
         Vm.EnsureCursorHooksInstalled();
+        _ = Vm.CheckForUpdatesAsync();
     }
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -76,6 +80,14 @@ public partial class MainWindow : Window
     {
         var sel = QueueGrid.SelectedItems.Cast<QueueItemModel>().ToList();
         await Vm.PlaySelectedAsync(sel).ConfigureAwait(true);
+    }
+
+    private void QueueGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not DataGrid)
+            return;
+        var sel = QueueGrid.SelectedItems.Cast<QueueItemModel>();
+        Vm.UpdateSelectedQueueText(sel);
     }
 
     private void MoveUp_Click(object sender, RoutedEventArgs e)

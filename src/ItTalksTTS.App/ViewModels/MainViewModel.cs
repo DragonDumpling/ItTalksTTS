@@ -20,6 +20,8 @@ public partial class MainViewModel : ObservableObject
 
     private readonly AppServices _svc;
     private readonly Window _owner;
+    private readonly UpdateCheckService _updateCheck = new();
+    private readonly AppUpdateService _appUpdate = new();
 
     public ObservableCollection<string> Voices { get; } = new();
 
@@ -38,6 +40,20 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool isKokoroRunning;
 
     [ObservableProperty] private string cursorHooksStatus = "";
+
+    [ObservableProperty] private string selectedQueueText = "";
+
+    [ObservableProperty] private bool updateAvailable;
+
+    [ObservableProperty] private string updateAvailableLabel = "Update available";
+
+    [ObservableProperty] private string? updateReleaseUrl;
+
+    [ObservableProperty] private string? updateSetupDownloadUrl;
+
+    [ObservableProperty] private Version? updateLatestVersion;
+
+    [ObservableProperty] private bool updateInProgress;
 
     public MainViewModel(Window owner, AppServices svc)
     {
@@ -163,6 +179,8 @@ public partial class MainViewModel : ObservableObject
         IsKokoroRunning = _svc.Kokoro.State == KokoroServiceState.Running;
         RefreshVoiceStatus();
         await RefreshVoicesInternalAsync().ConfigureAwait(true);
+        if (IsKokoroRunning && Settings.Autoplay && !_svc.Playback.IsPlaying)
+            await _svc.Playback.TryAutoplayChainAsync().ConfigureAwait(true);
     }
 
     [RelayCommand]
@@ -226,6 +244,43 @@ public partial class MainViewModel : ObservableObject
             return;
         await _svc.Playback.PlayIdsAsync(ids, allowReplay: true).ConfigureAwait(true);
     }
+
+    public void UpdateSelectedQueueText(IEnumerable<QueueItemModel> selected)
+    {
+        var items = selected.ToList();
+        SelectedQueueText = items.Count switch
+        {
+            0 => "",
+            1 => items[0].Text,
+            _ => string.Join("\n\n---\n\n", items.Select(i => i.Text))
+        };
+    }
+
+    [RelayCommand]
+    private void CopySelectedQueueText()
+    {
+        if (string.IsNullOrEmpty(SelectedQueueText))
+            return;
+        try
+        {
+            Clipboard.SetDataObject(SelectedQueueText);
+        }
+        catch (Exception ex)
+        {
+            _svc.Log.Append("Copy queue text failed: " + ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private void SendSelectedToPaste()
+    {
+        if (string.IsNullOrEmpty(SelectedQueueText))
+            return;
+        PasteText = SelectedQueueText;
+        RequestPasteTab?.Invoke();
+    }
+
+    public event Action? RequestPasteTab;
 
     public void SaveAutoplay() => _svc.PersistSettings();
 
@@ -325,5 +380,101 @@ public partial class MainViewModel : ObservableObject
             foreach (var v in r.Voices!)
                 Voices.Add(v);
         });
+    }
+
+    public async Task CheckForUpdatesAsync()
+    {
+        var result = await _updateCheck.CheckAsync(AppBuildInfo.CurrentVersion).ConfigureAwait(true);
+        if (result.Error is not null)
+        {
+            _svc.Log.Append("Update check: " + result.Error);
+            return;
+        }
+
+        UpdateReleaseUrl = result.ReleaseUrl;
+        UpdateSetupDownloadUrl = result.SetupDownloadUrl;
+        UpdateLatestVersion = result.LatestVersion;
+        UpdateAvailable = result.UpdateAvailable;
+        if (result.LatestVersion is { } latest)
+            UpdateAvailableLabel = $"Update available ({ReleaseVersion.Format(latest)})";
+    }
+
+    public bool CanApplyUpdate => UpdateAvailable && !UpdateInProgress;
+
+    partial void OnUpdateAvailableChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanApplyUpdate));
+        ApplyUpdateCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnUpdateInProgressChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanApplyUpdate));
+        ApplyUpdateCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanApplyUpdate))]
+    private async Task ApplyUpdateAsync()
+    {
+        if (UpdateLatestVersion is null)
+        {
+            await CheckForUpdatesAsync().ConfigureAwait(true);
+            if (UpdateLatestVersion is null)
+                return;
+        }
+
+        var downloadUrl = UpdateSetupDownloadUrl;
+        if (string.IsNullOrWhiteSpace(downloadUrl))
+        {
+            _svc.Log.Append("Update: installer not found on latest release — opening download page.");
+            OpenReleasePage();
+            return;
+        }
+
+        UpdateInProgress = true;
+        UpdateAvailableLabel = "Downloading update...";
+        try
+        {
+            _svc.Log.Append($"Update: fetching {ReleaseVersion.Format(UpdateLatestVersion)}...");
+            var setupPath = await _appUpdate
+                .DownloadSetupAsync(downloadUrl, UpdateLatestVersion, _svc.Log.Append)
+                .ConfigureAwait(true);
+
+            UpdateAvailableLabel = "Installing update...";
+            _svc.Log.Append("Update: launching installer (approve UAC if prompted)...");
+            _appUpdate.LaunchInstaller(setupPath);
+            Application.Current.Shutdown();
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            _svc.Log.Append("Update cancelled (UAC prompt declined).");
+        }
+        catch (Exception ex)
+        {
+            _svc.Log.Append("Update failed: " + ex.Message);
+            if (UpdateLatestVersion is { } latest)
+                UpdateAvailableLabel = $"Update available ({ReleaseVersion.Format(latest)})";
+        }
+        finally
+        {
+            UpdateInProgress = false;
+        }
+    }
+
+    private void OpenReleasePage()
+    {
+        var url = UpdateReleaseUrl ?? UpdateCheckService.LatestReleasePageUrl;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _svc.Log.Append("Open update page failed: " + ex.Message);
+        }
     }
 }

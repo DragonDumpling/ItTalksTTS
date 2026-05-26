@@ -95,6 +95,12 @@ public sealed class LocalApiServer : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(filtered))
             return Results.BadRequest("empty after filters");
         var source = string.IsNullOrWhiteSpace(body.Source) ? "API" : body.Source!;
+        if (source.Equals("cursor-hook", StringComparison.OrdinalIgnoreCase)
+            && _queue.HasRecentDuplicate(filtered, source, TimeSpan.FromSeconds(15)))
+        {
+            return Results.Json(new { duplicate = true });
+        }
+
         var id = _queue.Enqueue(filtered, source);
         try
         {

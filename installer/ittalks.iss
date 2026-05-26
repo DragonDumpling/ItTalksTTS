@@ -4,7 +4,7 @@
 ;   dotnet publish ..\src\ItTalksTTS.McpServer\ItTalksTTS.McpServer.csproj -c Release -r win-x64 --self-contained true -o ..\publish\Mcp
 
 #define MyAppName "ItTalksTTS"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.2"
 #define MyAppPublisher "ItTalksTTS"
 #define MyAppExeName "ItTalksTTS.exe"
 #define PublishRoot "..\publish"
@@ -23,6 +23,8 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
+CloseApplications=force
+RestartApplications=yes
 SetupIconFile=..\src\ItTalksTTS.App\Assets\ittalks.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 

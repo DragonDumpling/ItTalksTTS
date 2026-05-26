@@ -82,7 +82,7 @@ Example `mcp.json`:
 
 ## Developers (this repository)
 
-If you work on ItTalksTTS itself, the repo still has [`.cursor/hooks.json`](../.cursor/hooks.json) for **project** hooks when this folder is open. End users should rely on **user hooks** installed by the app/installer, not on cloning the repo.
+Use **user hooks** (installed by the app on first launch) when working in this repo. Do **not** add a project-level `afterAgentResponse` hook here — Cursor runs **both** user and project hooks, which would enqueue every reply twice. The repo’s [`.cursor/hooks.json`](../.cursor/hooks.json) is intentionally empty.
 
 ---
 

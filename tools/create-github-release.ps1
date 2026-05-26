@@ -27,11 +27,17 @@ $headers = @{
 }
 
 $notes = @"
-Windows 64-bit installer.
+## What's new in 0.1.2
 
-- Download **ItTalksTTS-Setup.exe** (or **ItTalksTTS-Windows.zip**) and run the setup.
-- First launch downloads Kokoro voice models (internet required).
-- **Cursor:** user hooks install automatically — restart Cursor, use Agent mode in any project (no repo clone).
+- **In-app updates** — update button downloads and installs the latest release automatically
+- **The Q improvements** — copy text, send to Paste, error handling fixes, autoplay continues from selected item
+- **Cursor hooks** — fixed duplicate enqueue when user + project hooks both ran
+
+## Install
+
+- Download **ItTalksTTS-Setup.exe** and run the setup
+- First launch downloads Kokoro voice models (internet required)
+- **Cursor:** user hooks install automatically — restart Cursor, use Agent mode in any project
 "@
 
 $releaseBody = @{

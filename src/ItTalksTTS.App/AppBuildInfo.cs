@@ -4,6 +4,24 @@ namespace ItTalksTTS.App;
 
 internal static class AppBuildInfo
 {
+    public static Version CurrentVersion
+    {
+        get
+        {
+            var asm = typeof(AppBuildInfo).Assembly;
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrEmpty(info))
+            {
+                var plus = info.IndexOf('+', StringComparison.Ordinal);
+                var semver = plus >= 0 ? info[..plus] : info;
+                if (Version.TryParse(semver, out var v))
+                    return v;
+            }
+
+            return asm.GetName().Version ?? new Version(0, 0, 0, 0);
+        }
+    }
+
     public static string ShortLabel
     {
         get

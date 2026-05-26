@@ -14,6 +14,7 @@ public sealed class PlaybackService
     private CancellationTokenSource? _cts;
     private readonly SemaphoreSlim _playLock = new(1, 1);
     private bool _suppressAutoplay;
+    private Guid? _lastCompletedId;
     private readonly object _waveLock = new();
     private WaveOutEvent? _activeWaveOut;
     private volatile bool _audioPhase;
@@ -145,6 +146,9 @@ public sealed class PlaybackService
                     token.ThrowIfCancellationRequested();
                     await PlayOneAsync(id, token, allowReplayFromCaller).ConfigureAwait(false);
                 }
+
+                if (idsOrNull.Count > 1)
+                    ClipFinished?.Invoke();
             }
             else
             {
@@ -198,7 +202,8 @@ public sealed class PlaybackService
         {
             if (_app.Kokoro.State != KokoroServiceState.Running)
             {
-                _app.Queue.SetState(id, QueueItemState.Error, "Kokoro worker not running.");
+                _app.Queue.SetState(id, QueueItemState.Pending, null);
+                _log("Playback skipped: start Kokoro on the Voice tab to hear speech.");
                 return;
             }
 
@@ -221,6 +226,7 @@ public sealed class PlaybackService
             wav = resp.Wav;
             await PlayWavFileAsync(wav, token).ConfigureAwait(false);
             _app.Queue.SetState(id, QueueItemState.Played);
+            _lastCompletedId = id;
             if (!_suppressAutoplay)
                 ClipFinished?.Invoke();
         }
@@ -307,9 +313,15 @@ public sealed class PlaybackService
             return;
         if (IsPlaying)
             return;
-        var next = _app.Queue.FirstPending();
+        if (_app.Kokoro.State != KokoroServiceState.Running)
+            return;
+
+        var next = _lastCompletedId is { } last
+            ? _app.Queue.NextPendingAfter(last)
+            : null;
+        next ??= _app.Queue.FirstPending();
         if (next is null)
             return;
-        await PlayFirstPendingAsync().ConfigureAwait(false);
+        await PlayIdsAsync(new[] { next.Id }).ConfigureAwait(false);
     }
 }

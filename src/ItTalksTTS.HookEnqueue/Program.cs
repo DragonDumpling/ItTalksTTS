@@ -117,7 +117,12 @@ internal static class Program
             .ConfigureAwait(false);
         var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
         if (resp.IsSuccessStatusCode)
-            Log($"enqueued to The Q ({text.Length} chars)");
+        {
+            if (body.Contains("\"duplicate\"", StringComparison.Ordinal))
+                Log("duplicate skipped (already in The Q)");
+            else
+                Log($"enqueued to The Q ({text.Length} chars)");
+        }
         else
             Log($"HTTP {(int)resp.StatusCode} {body}");
     }

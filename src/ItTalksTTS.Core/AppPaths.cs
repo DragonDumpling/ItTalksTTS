@@ -27,5 +27,7 @@ public static class AppPaths
 
     public static string WorkerDir => Path.Combine(Root, "kokoro_worker");
 
+    public static string UpdatesDir => Path.Combine(Root, "updates");
+
     public static void EnsureRoot() => Directory.CreateDirectory(Root);
 }
