@@ -12,9 +12,13 @@ TLDR: This uses the open-source Kokoro text-to-speech engine to read text aloud 
 
 ### Video walkthrough
 
-<video src="docs/media/ItTalksTTS_rundown.mp4" controls width="100%">
-  Your browser does not support embedded video. <a href="docs/media/ItTalksTTS_rundown.mp4">Download the rundown video</a>.
-</video>
+GitHub does not play videos from repo file paths in the README. **Click the preview below** to watch the full walkthrough in your browser:
+
+<a href="https://github.com/DragonDumpling/ItTalksTTS/releases/download/v0.1.2/ItTalksTTS_rundown.mp4">
+  <img src="docs/media/the-q.png" alt="Watch the ItTalksTTS walkthrough — click to play" width="900"/>
+</a>
+
+**▶ [Watch the walkthrough (MP4)](https://github.com/DragonDumpling/ItTalksTTS/releases/download/v0.1.2/ItTalksTTS_rundown.mp4)**
 
 ### Screenshots
 
