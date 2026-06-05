@@ -128,6 +128,11 @@ Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip th
 | `%LocalAppData%\ItTalksTTS\runtime.json` | API port (while running) |
 | `%LocalAppData%\ItTalksTTS\models\` | Kokoro ONNX + voices |
 | `%LocalAppData%\ItTalksTTS\queue.json` | Saved queue |
+| `%LocalAppData%\ItTalksTTS\kokoro_worker\` | Deployed TTS worker scripts (refreshed on update) |
+| `%LocalAppData%\ItTalksTTS\logs\app.log` | Runtime log; rotates to `app.1.log`/`app.2.log` at ~1 MB each |
+
+The log file persists after the app closes, so you can inspect it to diagnose a past
+session. The path is also printed at the top of the in-app log on every launch.
 
 ## License
 

@@ -29,5 +29,9 @@ public static class AppPaths
 
     public static string UpdatesDir => Path.Combine(Root, "updates");
 
+    public static string LogsDir => Path.Combine(Root, "logs");
+
+    public static string LogFilePath => Path.Combine(LogsDir, "app.log");
+
     public static void EnsureRoot() => Directory.CreateDirectory(Root);
 }

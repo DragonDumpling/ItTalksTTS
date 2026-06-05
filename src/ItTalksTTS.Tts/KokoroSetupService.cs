@@ -50,6 +50,49 @@ public sealed class KokoroSetupService
         }
     }
 
+    /// <summary>
+    /// Refresh the deployed worker *.py scripts from the copy bundled with this build.
+    /// ResolveWorkerScript prefers the deployed copy, so without this an app update would
+    /// keep running the previous version's worker.py. Only runs when a worker was already
+    /// deployed (i.e. setup completed before); never throws — logging must not break launch.
+    /// </summary>
+    public void TryRefreshDeployedWorkerScripts()
+    {
+        try
+        {
+            var deployed = Path.Combine(AppPaths.WorkerDir, "worker.py");
+            if (!File.Exists(deployed))
+                return; // Setup hasn't run yet; first setup will deploy the current scripts.
+            var srcDir = ResolveBundledWorkerDir();
+            if (srcDir is null)
+                return;
+            foreach (var file in Directory.GetFiles(srcDir, "*.py"))
+            {
+                var dst = Path.Combine(AppPaths.WorkerDir, Path.GetFileName(file));
+                if (FilesDiffer(file, dst))
+                {
+                    File.Copy(file, dst, true);
+                    _log($"Refreshed worker script: {Path.GetFileName(file)}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log("Worker script refresh skipped: " + ex.Message);
+        }
+    }
+
+    private static bool FilesDiffer(string src, string dst)
+    {
+        if (!File.Exists(dst))
+            return true;
+        var a = new FileInfo(src);
+        var b = new FileInfo(dst);
+        if (a.Length != b.Length)
+            return true;
+        return !File.ReadAllBytes(src).AsSpan().SequenceEqual(File.ReadAllBytes(dst));
+    }
+
     private static string? ResolveBundledWorkerDir()
     {
         var baseDir = AppContext.BaseDirectory;

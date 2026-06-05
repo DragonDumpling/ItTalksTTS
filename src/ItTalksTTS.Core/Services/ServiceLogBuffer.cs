@@ -10,6 +10,9 @@ public sealed class ServiceLogBuffer
 
     public ObservableCollection<string> Lines { get; } = new();
 
+    /// <summary>Optional sink invoked for every appended line (e.g. a disk logger).</summary>
+    public Action<string>? OnAppend { get; set; }
+
     public ServiceLogBuffer(int maxLines = 500) => _max = maxLines;
 
     public string GetAllText()
@@ -37,6 +40,15 @@ public sealed class ServiceLogBuffer
             Lines.Add(full);
             while (Lines.Count > _max)
                 Lines.RemoveAt(0);
+        }
+
+        try
+        {
+            OnAppend?.Invoke(line);
+        }
+        catch
+        {
+            /* a logging sink must never break in-memory logging */
         }
     }
 }

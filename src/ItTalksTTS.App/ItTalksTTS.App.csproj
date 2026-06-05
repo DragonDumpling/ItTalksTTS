@@ -9,7 +9,7 @@
     <RootNamespace>ItTalksTTS.App</RootNamespace>
     <AssemblyName>ItTalksTTS</AssemblyName>
     <ApplicationIcon>Assets\ittalks.ico</ApplicationIcon>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 

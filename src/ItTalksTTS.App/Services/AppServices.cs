@@ -21,6 +21,8 @@ public sealed class AppServices
 
     public ServiceLogBuffer Log { get; } = new();
 
+    public FileLogSink LogFile { get; } = new(AppPaths.LogFilePath);
+
     public KokoroWorkerSupervisor Kokoro { get; }
 
     public KokoroSetupService Setup { get; }
@@ -31,6 +33,8 @@ public sealed class AppServices
 
     public AppServices()
     {
+        // Mirror every in-memory log line to disk so logs survive after the app closes.
+        Log.OnAppend = LogFile.Append;
         void LogLine(string s) => Log.Append(s);
         Kokoro = new KokoroWorkerSupervisor(LogLine);
         Setup = new KokoroSetupService(LogLine);
@@ -54,8 +58,11 @@ public sealed class AppServices
     public void Initialize()
     {
         AppPaths.EnsureRoot();
+        Log.Append($"Logs: {LogFile.Path}");
         Settings = SettingsStore.Load();
         Queue.LoadFromDisk();
+        // Keep the deployed worker script in sync with this build (e.g. after an update).
+        Setup.TryRefreshDeployedWorkerScripts();
     }
 
     public void PersistSettings() => SettingsStore.Save(Settings);

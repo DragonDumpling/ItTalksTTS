@@ -219,7 +219,9 @@ public sealed class PlaybackService
                 token).ConfigureAwait(false);
             if (resp is not { Ok: true } || string.IsNullOrEmpty(resp.Wav))
             {
-                _app.Queue.SetState(id, QueueItemState.Error, resp?.Error ?? "Synthesis failed.");
+                var reason = resp?.Error ?? "Synthesis failed.";
+                _log($"Synthesis failed (len {item.Text.Length}): {Summarize(reason)}");
+                _app.Queue.SetState(id, QueueItemState.Error, reason);
                 return;
             }
 
@@ -237,6 +239,7 @@ public sealed class PlaybackService
         }
         catch (Exception ex)
         {
+            _log($"Playback error (len {item.Text.Length}): {Summarize(ex.Message)}");
             _app.Queue.SetState(id, QueueItemState.Error, ex.Message);
         }
         finally
@@ -253,6 +256,14 @@ public sealed class PlaybackService
                 }
             }
         }
+    }
+
+    private static string Summarize(string message)
+    {
+        // Collapse multi-line worker tracebacks to one readable log line.
+        var lines = message.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var text = lines.Length == 0 ? message.Trim() : string.Join(" | ", lines[^Math.Min(2, lines.Length)..]);
+        return text.Length > 400 ? text[..400] + "…" : text;
     }
 
     private async Task PlayWavFileAsync(string path, CancellationToken token)
