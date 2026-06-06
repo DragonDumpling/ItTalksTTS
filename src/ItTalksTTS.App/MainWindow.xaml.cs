@@ -11,6 +11,7 @@ namespace ItTalksTTS.App;
 public partial class MainWindow : Window
 {
     private bool _tabSoundReady;
+    private bool _engineComboReady;
 
     static MainWindow()
     {
@@ -60,6 +61,7 @@ public partial class MainWindow : Window
         var preview = tok.Length > 10 ? tok[..10] + "…" : tok;
         Vm.ApiListenInfo = $"POST http://127.0.0.1:{p}/v1/queue  —  Authorization: Bearer {preview}";
         _tabSoundReady = true;
+        _engineComboReady = true;
         await Vm.RunFirstLaunchSetupIfNeededAsync().ConfigureAwait(true);
         Vm.EnsureCursorHooksInstalled();
         _ = Vm.CheckForUpdatesAsync();
@@ -106,5 +108,16 @@ public partial class MainWindow : Window
     {
         SfxService.PlayButton();
         Vm.SaveAutoplay();
+    }
+
+    private void F5Field_LostFocus(object sender, RoutedEventArgs e) => Vm.SaveSettings();
+
+    private async void Model_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_engineComboReady || DataContext is not MainViewModel vm)
+            return;
+        if (ModelCombo.SelectedValue is string key)
+            vm.Settings.SelectedModel = key;
+        await vm.OnEngineChangedAsync().ConfigureAwait(true);
     }
 }

@@ -123,7 +123,7 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (_svc.Kokoro.State != KokoroServiceState.Running)
+        if (_svc.Worker.State != TtsServiceState.Running)
         {
             _svc.Log.Append("Test voice: start Kokoro first.");
             return;
@@ -173,10 +173,12 @@ public partial class MainViewModel : ObservableObject
     private void SaveFilters() => _svc.PersistSettings();
 
     [RelayCommand]
-    private async Task StartKokoroAsync()
+    private async Task StartEngineAsync()
     {
-        await _svc.Kokoro.StartAsync().ConfigureAwait(true);
-        IsKokoroRunning = _svc.Kokoro.State == KokoroServiceState.Running;
+        // Persist the active engine + its voice settings so next launch is just "Start engine".
+        _svc.PersistSettings();
+        await _svc.Worker.StartAsync().ConfigureAwait(true);
+        IsKokoroRunning = _svc.Worker.State == TtsServiceState.Running;
         RefreshVoiceStatus();
         await RefreshVoicesInternalAsync().ConfigureAwait(true);
         if (IsKokoroRunning && Settings.Autoplay && !_svc.Playback.IsPlaying)
@@ -184,11 +186,47 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task StopKokoroAsync()
+    private async Task StopEngineAsync()
     {
-        await _svc.Kokoro.StopAsync().ConfigureAwait(true);
+        await _svc.Worker.StopAsync().ConfigureAwait(true);
         IsKokoroRunning = false;
         RefreshVoiceStatus();
+    }
+
+    /// <summary>Active engine selected in Settings.SelectedModel.</summary>
+    public EngineDescriptor ActiveEngine => EngineRegistry.FromKey(Settings.SelectedModel);
+
+    public bool IsNamedVoiceMode => ActiveEngine.VoiceMode == VoiceInputMode.NamedVoices;
+
+    public bool IsReferenceAudioMode => ActiveEngine.VoiceMode == VoiceInputMode.ReferenceAudio;
+
+    /// <summary>Called when the Model dropdown changes: stop the old engine, swap the voice UI, re-gate setup.</summary>
+    public async Task OnEngineChangedAsync()
+    {
+        _svc.PersistSettings();
+        await _svc.Worker.StopAsync().ConfigureAwait(true);
+        IsKokoroRunning = false;
+        Voices.Clear();
+        OnPropertyChanged(nameof(ActiveEngine));
+        OnPropertyChanged(nameof(IsNamedVoiceMode));
+        OnPropertyChanged(nameof(IsReferenceAudioMode));
+        RefreshVoiceStatus();
+        RefreshSetupGate();
+    }
+
+    [RelayCommand]
+    private void BrowseRefAudio()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Pick a reference clip (3–12 seconds, clean speech)",
+            Filter = "Audio (*.wav;*.flac;*.ogg)|*.wav;*.flac;*.ogg|All files|*.*"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            Settings.F5RefAudioPath = dlg.FileName;
+            _svc.PersistSettings();
+        }
     }
 
     [RelayCommand]
@@ -284,13 +322,24 @@ public partial class MainViewModel : ObservableObject
 
     public void SaveAutoplay() => _svc.PersistSettings();
 
+    /// <summary>Persist current settings (e.g. F5 reference clip + transcript) so they survive a restart.</summary>
+    public void SaveSettings() => _svc.PersistSettings();
+
     private void RefreshSetupGate()
     {
-        var hasModel = File.Exists(AppPaths.KokoroOnnx) && File.Exists(AppPaths.KokoroVoices);
-        var hasWorker = File.Exists(_svc.Kokoro.ResolveWorkerScript());
-        var hasPython = File.Exists(Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe"))
-            || File.Exists(Path.Combine(AppPaths.PythonPackages, ".ittalks-ready"));
-        SetupRequired = !(hasModel && hasWorker && hasPython);
+        var engine = ActiveEngine;
+        if (engine.Id == TtsEngineId.KokoroOnnx)
+        {
+            var hasModel = File.Exists(AppPaths.KokoroOnnx) && File.Exists(AppPaths.KokoroVoices);
+            var hasWorker = File.Exists(_svc.Worker.ResolveWorkerScript(engine));
+            var hasPython = File.Exists(Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe"))
+                || File.Exists(Path.Combine(AppPaths.PythonPackages, ".ittalks-ready"));
+            SetupRequired = !(hasModel && hasWorker && hasPython);
+        }
+        else
+        {
+            SetupRequired = !EngineRegistry.IsInstalled(engine);
+        }
     }
 
     public async Task RunFirstLaunchSetupIfNeededAsync()
@@ -350,13 +399,13 @@ public partial class MainViewModel : ObservableObject
 
     private void RefreshVoiceStatus()
     {
-        switch (_svc.Kokoro.State)
+        switch (_svc.Worker.State)
         {
-            case KokoroServiceState.Running when string.IsNullOrEmpty(_svc.Kokoro.LastError):
+            case TtsServiceState.Running when string.IsNullOrEmpty(_svc.Worker.LastError):
                 VoiceStatusLabel = "Ready";
                 VoiceStatusBrush = Brushes.LimeGreen;
                 break;
-            case KokoroServiceState.Error:
+            case TtsServiceState.Error:
                 VoiceStatusLabel = "Error";
                 VoiceStatusBrush = Brushes.IndianRed;
                 break;
@@ -369,9 +418,9 @@ public partial class MainViewModel : ObservableObject
 
     private async Task RefreshVoicesInternalAsync()
     {
-        if (_svc.Kokoro.State != KokoroServiceState.Running)
+        if (_svc.Worker.State != TtsServiceState.Running)
             return;
-        var r = await _svc.Kokoro.SendAsync(new WorkerRequest { Cmd = "ping" }).ConfigureAwait(true);
+        var r = await _svc.Worker.SendAsync(new WorkerRequest { Cmd = "ping" }).ConfigureAwait(true);
         if (r?.Voices is not { Count: > 0 })
             return;
         Application.Current.Dispatcher.Invoke(() =>

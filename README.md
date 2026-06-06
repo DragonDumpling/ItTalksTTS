@@ -55,13 +55,29 @@ GitHub does not play videos from repo file paths in the README. **Click the prev
 
 ## Features
 
-- **Voice** — Kokoro worker, voices, test line, service log.
+- **Voice** — pick a TTS engine, set its voice, test line, service log.
 - **The Q** — Queue, play/pause, replay, reorder, Autoplay.
 - **The Paste** — Paste, filter, enqueue.
 - **Filters** — Persistent normalization rules.
 - **Local API** — `POST /v1/queue` (bearer token while the app runs).
 - **Cursor hooks** — Agent replies → The Q (`cursor-hook`).
 - **MCP** (optional) — `EnqueueTts`, `GetApiStatus`.
+
+---
+
+## TTS engines
+
+Switch engines from the **Model** dropdown on the Voice tab:
+
+| Engine | Voice selection | Install |
+|--------|-----------------|---------|
+| **Kokoro (ONNX)** | Named voices (`af_sarah`, …) | Bundled — lightweight, CPU, the default |
+| **F5-TTS** | Zero-shot **voice cloning** from a reference clip + its transcript | On-demand via **Setup / Repair** |
+
+**F5-TTS notes:**
+- It clones a voice from a short (3–12s) **reference WAV/FLAC** plus the **exact transcript** of that clip. Leave both blank to use the bundled default voice.
+- Setup installs PyTorch into the engine's own environment, **auto-detecting your GPU** (CUDA wheels for NVIDIA, otherwise CPU) and downloads the model (~1.3 GB). It needs a **system Python 3.10–3.12** on PATH.
+- Each engine gets an isolated Python environment under `engines\`, so Kokoro stays lightweight.
 
 ---
 
@@ -114,7 +130,7 @@ Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip th
 |--------|------|
 | `ItTalksTTS.App` | WPF UI, playback, API host |
 | `ItTalksTTS.Core` | Queue, persistence, filters, encoding |
-| `ItTalksTTS.Tts` | Kokoro worker / setup |
+| `ItTalksTTS.Tts` | TTS engines (Kokoro, F5-TTS), worker supervisor & setup |
 | `ItTalksTTS.Api` | Local HTTP API |
 | `ItTalksTTS.HookEnqueue` | Cursor hook → API |
 | `ItTalksTTS.McpServer` | MCP stdio server |
@@ -128,7 +144,8 @@ Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip th
 | `%LocalAppData%\ItTalksTTS\runtime.json` | API port (while running) |
 | `%LocalAppData%\ItTalksTTS\models\` | Kokoro ONNX + voices |
 | `%LocalAppData%\ItTalksTTS\queue.json` | Saved queue |
-| `%LocalAppData%\ItTalksTTS\kokoro_worker\` | Deployed TTS worker scripts (refreshed on update) |
+| `%LocalAppData%\ItTalksTTS\kokoro_worker\` | Deployed TTS worker scripts + F5 default reference (refreshed on update) |
+| `%LocalAppData%\ItTalksTTS\engines\<id>\` | Per-engine Python env + models (e.g. F5-TTS) |
 | `%LocalAppData%\ItTalksTTS\logs\app.log` | Runtime log; rotates to `app.1.log`/`app.2.log` at ~1 MB each |
 
 The log file persists after the app closes, so you can inspect it to diagnose a past

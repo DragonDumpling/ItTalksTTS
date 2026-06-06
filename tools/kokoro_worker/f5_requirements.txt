@@ -1,0 +1,5 @@
+# Installed into the F5 engine's own Python env (separate from Kokoro).
+# torch + torchaudio are installed first by setup with the right CUDA/CPU index,
+# so they are intentionally NOT pinned here.
+f5-tts
+soundfile>=0.12.1

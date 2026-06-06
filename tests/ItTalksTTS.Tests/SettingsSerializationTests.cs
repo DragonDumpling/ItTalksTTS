@@ -17,4 +17,21 @@ public class SettingsSerializationTests
         Assert.Equal("`", back.FilterRules[0].Match);
         Assert.True(back.Autoplay);
     }
+
+    [Fact]
+    public void AppSettings_roundtrips_engine_and_f5_fields()
+    {
+        var m = new AppSettingsModel
+        {
+            SelectedModel = "F5TTS",
+            F5RefAudioPath = @"C:\clips\me.wav",
+            F5RefText = "This is my voice."
+        };
+        var opts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var back = JsonSerializer.Deserialize<AppSettingsModel>(JsonSerializer.Serialize(m, opts), opts);
+        Assert.NotNull(back);
+        Assert.Equal("F5TTS", back.SelectedModel);
+        Assert.Equal(@"C:\clips\me.wav", back.F5RefAudioPath);
+        Assert.Equal("This is my voice.", back.F5RefText);
+    }
 }

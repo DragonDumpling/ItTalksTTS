@@ -54,8 +54,9 @@ public partial class SetupWindow : Window
                 if (p.fraction is { } f)
                     Progress.Value = f * 100;
             });
-            await setup.RunSetupAsync(progress, CancellationToken.None).ConfigureAwait(true);
-            Status.Text = "Setup complete. You can close this window.";
+            var engine = EngineRegistry.FromKey(_svc.Settings.SelectedModel);
+            await setup.InstallEngineAsync(engine, progress, CancellationToken.None).ConfigureAwait(true);
+            Status.Text = $"{engine.DisplayName} setup complete. You can close this window.";
             Progress.Value = 100;
             SfxService.PlaySuccess();
         }

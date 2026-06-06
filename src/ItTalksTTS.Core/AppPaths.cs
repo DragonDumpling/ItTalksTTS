@@ -33,5 +33,25 @@ public static class AppPaths
 
     public static string LogFilePath => Path.Combine(LogsDir, "app.log");
 
+    /// <summary>Marker written into a packages dir once pip install completes (embedded-Python path).</summary>
+    public const string PackagesReadyMarker = ".ittalks-ready";
+
+    // --- Per-engine layout (engines other than the default Kokoro env) ---
+
+    public static string EnginesDir => Path.Combine(Root, "engines");
+
+    public static string EngineRoot(string folder) => Path.Combine(EnginesDir, folder);
+
+    public static string EngineVenv(string folder) => Path.Combine(EngineRoot(folder), "venv");
+
+    public static string EnginePackages(string folder) => Path.Combine(EngineRoot(folder), "packages");
+
+    public static string EngineModels(string folder) => Path.Combine(EngineRoot(folder), "models");
+
+    public static string EngineReadyMarker(string folder) => Path.Combine(EngineRoot(folder), ".ready");
+
+    /// <summary>The python.exe inside a Windows venv directory.</summary>
+    public static string VenvPython(string venvDir) => Path.Combine(venvDir, "Scripts", "python.exe");
+
     public static void EnsureRoot() => Directory.CreateDirectory(Root);
 }

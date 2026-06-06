@@ -200,22 +200,15 @@ public sealed class PlaybackService
         string? wav = null;
         try
         {
-            if (_app.Kokoro.State != KokoroServiceState.Running)
+            if (_app.Worker.State != TtsServiceState.Running)
             {
                 _app.Queue.SetState(id, QueueItemState.Pending, null);
-                _log("Playback skipped: start Kokoro on the Voice tab to hear speech.");
+                _log("Playback skipped: start the TTS engine on the Voice tab to hear speech.");
                 return;
             }
 
-            var resp = await _app.Kokoro.SendAsync(
-                new WorkerRequest
-                {
-                    Cmd = "synthesize",
-                    Text = item.Text,
-                    Voice = _app.Settings.SelectedVoice,
-                    Lang = "en-us",
-                    Speed = 1.0
-                },
+            var resp = await _app.Worker.SendAsync(
+                BuildSynthesizeRequest(item.Text),
                 token).ConfigureAwait(false);
             if (resp is not { Ok: true } || string.IsNullOrEmpty(resp.Wav))
             {
@@ -256,6 +249,50 @@ public sealed class PlaybackService
                 }
             }
         }
+    }
+
+    private WorkerRequest BuildSynthesizeRequest(string text)
+    {
+        var engine = _app.Worker.ActiveEngine;
+        if (engine.VoiceMode == VoiceInputMode.ReferenceAudio)
+        {
+            // Reference audio and its transcript MUST stay paired — F5 derives the
+            // speaking rate from len(gen_text)/len(ref_text), so a transcript that
+            // doesn't match the clip wrecks the timing. With no custom clip we use the
+            // bundled clip with ITS transcript; with a custom clip we use the user's
+            // transcript, or blank to let the worker auto-transcribe it.
+            string refAudio, refText;
+            if (string.IsNullOrWhiteSpace(_app.Settings.F5RefAudioPath))
+            {
+                refAudio = EngineRegistry.F5DefaultRefAudioPath;
+                refText = EngineRegistry.F5DefaultRefText;
+            }
+            else
+            {
+                refAudio = _app.Settings.F5RefAudioPath;
+                refText = _app.Settings.F5RefText ?? "";
+            }
+
+            return new WorkerRequest
+            {
+                Cmd = "synthesize",
+                Text = text,
+                RefAudio = refAudio,
+                RefText = refText,
+                Lang = "en-us",
+                // F5 clones the reference cadence and tends to run fast; 0.85 reads at a natural pace.
+                Speed = 0.85
+            };
+        }
+
+        return new WorkerRequest
+        {
+            Cmd = "synthesize",
+            Text = text,
+            Voice = _app.Settings.SelectedVoice,
+            Lang = "en-us",
+            Speed = 1.0
+        };
     }
 
     private static string Summarize(string message)
@@ -324,7 +361,7 @@ public sealed class PlaybackService
             return;
         if (IsPlaying)
             return;
-        if (_app.Kokoro.State != KokoroServiceState.Running)
+        if (_app.Worker.State != TtsServiceState.Running)
             return;
 
         var next = _lastCompletedId is { } last

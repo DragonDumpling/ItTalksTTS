@@ -37,6 +37,165 @@ public sealed class KokoroSetupService
         progress?.Report(("Done.", 1.0));
     }
 
+    /// <summary>
+    /// Install/repair a specific engine. Kokoro routes to the existing self-contained
+    /// flow; torch engines (F5-TTS) get their own venv with CUDA/CPU torch wheels and
+    /// the engine's requirements, then pre-download their model.
+    /// </summary>
+    public async Task InstallEngineAsync(
+        EngineDescriptor engine,
+        IProgress<(string step, double? fraction)>? progress,
+        CancellationToken cancellationToken)
+    {
+        AppPaths.EnsureRoot();
+        DeployWorkerFiles();
+
+        if (!engine.NeedsTorch)
+        {
+            await RunSetupAsync(progress, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        Directory.CreateDirectory(engine.ModelsDir);
+
+        progress?.Report(("Preparing Python environment…", 0.05));
+        var venvPython = await EnsureEngineVenvAsync(engine, cancellationToken).ConfigureAwait(false);
+
+        var cuda = DetectCuda();
+        var index = cuda
+            ? "https://download.pytorch.org/whl/cu128"
+            : "https://download.pytorch.org/whl/cpu";
+        progress?.Report(($"Installing PyTorch ({(cuda ? "CUDA" : "CPU")})… this is a large download", 0.2));
+        await RunPythonAsync(venvPython, new[] { "-m", "pip", "install", "torch", "torchaudio", "--index-url", index }, null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var req = Path.Combine(AppPaths.WorkerDir, engine.RequirementsFile);
+        if (!File.Exists(req))
+            throw new InvalidOperationException($"Missing {req}");
+        progress?.Report(($"Installing {engine.DisplayName} packages…", 0.6));
+        await RunPythonAsync(venvPython, new[] { "-m", "pip", "install", "-r", req }, null, cancellationToken)
+            .ConfigureAwait(false);
+
+        progress?.Report(("Downloading the voice model…", 0.85));
+        var modelEnv = new Dictionary<string, string>(engine.EnvVars);
+        await RunPythonAsync(
+            venvPython,
+            new[] { "-c", "from f5_tts.api import F5TTS; F5TTS(); print('model ready')" },
+            modelEnv,
+            cancellationToken).ConfigureAwait(false);
+
+        File.WriteAllText(engine.ReadyMarkerPath, DateTime.UtcNow.ToString("O"));
+        progress?.Report(("Done.", 1.0));
+    }
+
+    private async Task<string> EnsureEngineVenvAsync(EngineDescriptor engine, CancellationToken cancellationToken)
+    {
+        var venvPython = AppPaths.VenvPython(engine.VenvDir);
+        if (File.Exists(venvPython))
+            return venvPython;
+
+        var basePython = FindSystemPython()
+            ?? throw new InvalidOperationException(
+                "F5-TTS needs a system Python 3.10–3.12. Install it from https://python.org "
+                + "(tick \"Add python.exe to PATH\"), then run Setup again.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(engine.VenvDir)!);
+        var create = NewProcess(basePython.Exe);
+        foreach (var a in basePython.Prefix)
+            create.ArgumentList.Add(a);
+        create.ArgumentList.Add("-m");
+        create.ArgumentList.Add("venv");
+        create.ArgumentList.Add(engine.VenvDir);
+        await RunProcessAsync(create, cancellationToken).ConfigureAwait(false);
+
+        if (!File.Exists(venvPython))
+            throw new InvalidOperationException($"venv creation did not produce {venvPython}");
+        await RunPythonAsync(venvPython, new[] { "-m", "pip", "install", "--upgrade", "pip", "wheel" }, null, cancellationToken)
+            .ConfigureAwait(false);
+        return venvPython;
+    }
+
+    private bool DetectCuda()
+    {
+        try
+        {
+            var psi = NewProcess("nvidia-smi");
+            psi.ArgumentList.Add("-L");
+            using var p = Process.Start(psi);
+            if (p is null)
+                return false;
+            if (!p.WaitForExit(5000))
+            {
+                try { p.Kill(); } catch { /* ignore */ }
+                return false;
+            }
+
+            var detected = p.ExitCode == 0;
+            _log(detected ? "GPU detected (nvidia-smi) — installing CUDA PyTorch." : "No NVIDIA GPU — installing CPU PyTorch.");
+            return detected;
+        }
+        catch
+        {
+            _log("nvidia-smi not found — installing CPU PyTorch.");
+            return false;
+        }
+    }
+
+    private (string Exe, string[] Prefix)? FindSystemPython()
+    {
+        var candidates = new (string Exe, string[] Prefix)[]
+        {
+            ("py", new[] { "-3" }),
+            ("python", Array.Empty<string>()),
+            ("python3", Array.Empty<string>()),
+        };
+        foreach (var c in candidates)
+        {
+            try
+            {
+                var psi = NewProcess(c.Exe);
+                foreach (var a in c.Prefix)
+                    psi.ArgumentList.Add(a);
+                psi.ArgumentList.Add("--version");
+                using var p = Process.Start(psi);
+                if (p is null)
+                    continue;
+                var text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+                p.WaitForExit(5000);
+                var m = System.Text.RegularExpressions.Regex.Match(text, @"Python 3\.(\d+)");
+                if (p.ExitCode == 0 && m.Success && int.TryParse(m.Groups[1].Value, out var minor)
+                    && minor is >= 10 and <= 12)
+                    return c;
+            }
+            catch
+            {
+                /* try next */
+            }
+        }
+
+        return null;
+    }
+
+    private static ProcessStartInfo NewProcess(string fileName) => new()
+    {
+        FileName = fileName,
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true,
+    };
+
+    private async Task RunPythonAsync(string pythonExe, string[] args, IReadOnlyDictionary<string, string>? env, CancellationToken cancellationToken)
+    {
+        var psi = NewProcess(pythonExe);
+        foreach (var a in args)
+            psi.ArgumentList.Add(a);
+        if (env is not null)
+            foreach (var (k, v) in env)
+                psi.Environment[k] = v;
+        await RunProcessAsync(psi, cancellationToken).ConfigureAwait(false);
+    }
+
     public void DeployWorkerFiles()
     {
         Directory.CreateDirectory(AppPaths.WorkerDir);
@@ -66,13 +225,15 @@ public sealed class KokoroSetupService
             var srcDir = ResolveBundledWorkerDir();
             if (srcDir is null)
                 return;
-            foreach (var file in Directory.GetFiles(srcDir, "*.py"))
+            // Refresh all worker assets (scripts, requirements, the F5 reference clip)
+            // so engine files added by an update reach existing installs.
+            foreach (var file in Directory.GetFiles(srcDir))
             {
                 var dst = Path.Combine(AppPaths.WorkerDir, Path.GetFileName(file));
                 if (FilesDiffer(file, dst))
                 {
                     File.Copy(file, dst, true);
-                    _log($"Refreshed worker script: {Path.GetFileName(file)}");
+                    _log($"Refreshed worker file: {Path.GetFileName(file)}");
                 }
             }
         }

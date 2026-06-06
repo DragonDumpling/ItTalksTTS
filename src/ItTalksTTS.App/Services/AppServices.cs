@@ -23,7 +23,7 @@ public sealed class AppServices
 
     public FileLogSink LogFile { get; } = new(AppPaths.LogFilePath);
 
-    public KokoroWorkerSupervisor Kokoro { get; }
+    public WorkerSupervisor Worker { get; }
 
     public KokoroSetupService Setup { get; }
 
@@ -36,7 +36,7 @@ public sealed class AppServices
         // Mirror every in-memory log line to disk so logs survive after the app closes.
         Log.OnAppend = LogFile.Append;
         void LogLine(string s) => Log.Append(s);
-        Kokoro = new KokoroWorkerSupervisor(LogLine);
+        Worker = new WorkerSupervisor(LogLine, () => EngineRegistry.FromKey(Settings?.SelectedModel));
         Setup = new KokoroSetupService(LogLine);
         Playback = new PlaybackService(this, LogLine);
         Api = new LocalApiServer(Queue, () => Settings, SettingsStore, OnItemEnqueuedViaApi);
@@ -97,13 +97,13 @@ public sealed class AppServices
 
         try
         {
-            await Kokoro.StopAsync().ConfigureAwait(false);
+            await Worker.StopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             try
             {
-                Log.Append("Shutdown: Kokoro stop failed: " + ex.Message);
+                Log.Append("Shutdown: worker stop failed: " + ex.Message);
             }
             catch
             {

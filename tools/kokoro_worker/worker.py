@@ -205,16 +205,19 @@ def main() -> None:
     voices_path = os.environ.get("KOKORO_VOICES", "voices-v1.0.bin")
     kokoro = None
 
+    global _cur_id
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
+        _cur_id = None
         try:
             req = json.loads(line)
         except json.JSONDecodeError as e:
             _emit({"ok": False, "error": f"invalid json: {e}"})
             continue
 
+        _cur_id = req.get("id")
         cmd = req.get("cmd")
         try:
             if cmd == "ping":
@@ -264,7 +267,14 @@ def main() -> None:
             _emit({"ok": False, "error": traceback.format_exc()})
 
 
+# Id of the request currently being handled; echoed back so the host can match
+# responses to requests and drop stale ones.
+_cur_id = None
+
+
 def _emit(obj: dict) -> None:
+    if _cur_id is not None and "id" not in obj:
+        obj["id"] = _cur_id
     sys.stdout.write(json.dumps(obj) + "\n")
     sys.stdout.flush()
 

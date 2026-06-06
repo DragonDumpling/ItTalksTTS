@@ -57,7 +57,7 @@
         </Image>
         <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
           <TextBlock Text="ItTalksTTS" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource Brush.Text}"/>
-          <TextBlock Text="TTS bridge for Kokoro, Cursor hooks &amp; MCP"
+          <TextBlock Text="TTS bridge for Kokoro &amp; F5-TTS, Cursor hooks &amp; MCP"
                      Foreground="{DynamicResource Brush.Subtitle}"
                      FontSize="13"
                      Margin="0,2,0,0"/>
@@ -77,21 +77,62 @@
           </Grid.RowDefinitions>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
             <TextBlock Text="Model" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <controls:ThemedComboBox Width="220" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+            <controls:ThemedComboBox x:Name="ModelCombo" Width="160" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
                                    SelectedValue="{Binding Settings.SelectedModel}" SelectedValuePath="Content"
-                                   IsEditable="True" IsReadOnly="True">
+                                   IsEditable="True" IsReadOnly="True" SelectionChanged="Model_SelectionChanged">
               <ComboBoxItem Content="KokoroOnnx"/>
+              <ComboBoxItem Content="F5TTS"/>
             </controls:ThemedComboBox>
-            <TextBlock Text="Voice" VerticalAlignment="Center" Margin="16,0,8,0"/>
-            <controls:ThemedComboBox Width="200" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
-                                     ItemsSource="{Binding Voices}" Text="{Binding Settings.SelectedVoice, UpdateSourceTrigger=PropertyChanged}" IsEditable="True"/>
+
+            <!-- Kokoro: named voice picker -->
+            <StackPanel Orientation="Horizontal" Visibility="{Binding IsNamedVoiceMode, Converter={StaticResource BoolToVis}}">
+              <TextBlock Text="Voice" VerticalAlignment="Center" Margin="16,0,8,0"/>
+              <controls:ThemedComboBox Width="180" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+                                       ItemsSource="{Binding Voices}" Text="{Binding Settings.SelectedVoice, UpdateSourceTrigger=PropertyChanged}" IsEditable="True"/>
+            </StackPanel>
+
+            <!-- F5-TTS: reference clip + transcript for voice cloning -->
+            <StackPanel Orientation="Horizontal" Visibility="{Binding IsReferenceAudioMode, Converter={StaticResource BoolToVis}}">
+              <TextBlock Text="Reference" VerticalAlignment="Center" Margin="16,0,8,0"/>
+              <TextBox Width="180" VerticalContentAlignment="Center" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+                       Text="{Binding Settings.F5RefAudioPath, UpdateSourceTrigger=PropertyChanged}"
+                       LostFocus="F5Field_LostFocus">
+                <TextBox.ToolTip>
+                  <TextBlock>
+                    Reference clip whose voice is cloned. For best results:<LineBreak/>
+                    • 5–12 seconds long<LineBreak/>
+                    • one speaker, clear speech, no music or background noise<LineBreak/>
+                    • ends on a complete sentence (not mid-word)<LineBreak/>
+                    • WAV or FLAC<LineBreak/>
+                    Leave blank to use the bundled default voice.
+                  </TextBlock>
+                </TextBox.ToolTip>
+              </TextBox>
+              <Button Content="Browse…" Command="{Binding BrowseRefAudioCommand}" Margin="6,0,0,0" Padding="8,4"/>
+              <TextBlock Text="Transcript (optional)" VerticalAlignment="Center" Margin="12,0,8,0"/>
+              <TextBox Width="220" VerticalContentAlignment="Center" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+                       Text="{Binding Settings.F5RefText, UpdateSourceTrigger=PropertyChanged}"
+                       LostFocus="F5Field_LostFocus">
+                <TextBox.ToolTip>
+                  <TextBlock>
+                    The EXACT words spoken in your reference clip — every word, in order,<LineBreak/>
+                    with normal punctuation (it sets the pacing).<LineBreak/>
+                    <LineBreak/>
+                    Leave this blank and it will be auto-detected from the clip.<LineBreak/>
+                    Only fill it in to correct a mis-detection — a transcript that doesn't<LineBreak/>
+                    match the clip makes the speaking rate wrong.
+                  </TextBlock>
+                </TextBox.ToolTip>
+              </TextBox>
+            </StackPanel>
+
             <Button Content="Test voice" Command="{Binding TestVoiceCommand}" Margin="12,0,0,0" Padding="10,6" ToolTip="Speak a short thank-you line with the current voice"/>
             <Ellipse Width="14" Height="14" Margin="20,0,8,0" Fill="{Binding VoiceStatusBrush}"/>
             <TextBlock Text="{Binding VoiceStatusLabel}" VerticalAlignment="Center" FontWeight="SemiBold"/>
           </StackPanel>
           <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-            <Button Content="Start Kokoro" Command="{Binding StartKokoroCommand}" Margin="0,0,8,0" Padding="12,6"/>
-            <Button Content="Stop Kokoro" Command="{Binding StopKokoroCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Start engine" Command="{Binding StartEngineCommand}" Margin="0,0,8,0" Padding="12,6"/>
+            <Button Content="Stop engine" Command="{Binding StopEngineCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Refresh voices" Command="{Binding PingWorkerCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Setup / Repair…" Command="{Binding OpenSetupCommand}" Padding="12,6"/>
             <TextBlock Text="{Binding ApiListenInfo}" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>

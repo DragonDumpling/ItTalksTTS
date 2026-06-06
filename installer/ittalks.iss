@@ -4,7 +4,7 @@
 ;   dotnet publish ..\src\ItTalksTTS.McpServer\ItTalksTTS.McpServer.csproj -c Release -r win-x64 --self-contained true -o ..\publish\Mcp
 
 #define MyAppName "ItTalksTTS"
-#define MyAppVersion "0.1.2"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "ItTalksTTS"
 #define MyAppExeName "ItTalksTTS.exe"
 #define PublishRoot "..\publish"

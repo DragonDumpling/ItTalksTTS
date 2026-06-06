@@ -5,7 +5,7 @@ using ItTalksTTS.Tts.Protocol;
 
 namespace ItTalksTTS.Tts;
 
-public enum KokoroServiceState
+public enum TtsServiceState
 {
     Stopped,
     Starting,
@@ -13,56 +13,69 @@ public enum KokoroServiceState
     Error
 }
 
-public sealed class KokoroWorkerSupervisor : IDisposable
+/// <summary>
+/// Manages a single TTS worker process (one engine at a time) over the JSON-line
+/// protocol. Which engine to run, the interpreter, worker script, and environment
+/// all come from the active <see cref="EngineDescriptor"/>.
+/// </summary>
+public sealed class WorkerSupervisor : IDisposable
 {
     private readonly Action<string> _log;
+    private readonly Func<EngineDescriptor> _activeEngine;
     private Process? _process;
     private StreamWriter? _stdin;
     private readonly SemaphoreSlim _ioLock = new(1, 1);
     private Task? _stderrTask;
+    private long _requestId;
 
-    public KokoroServiceState State { get; private set; } = KokoroServiceState.Stopped;
+    public TtsServiceState State { get; private set; } = TtsServiceState.Stopped;
     public string? LastError { get; private set; }
 
-    public KokoroWorkerSupervisor(Action<string> log) => _log = log;
+    /// <summary>The engine the most recent StartAsync launched (or would launch).</summary>
+    public EngineDescriptor ActiveEngine => _activeEngine();
 
-    public string ResolvePythonExe()
+    public WorkerSupervisor(Action<string> log, Func<EngineDescriptor> activeEngine)
+    {
+        _log = log;
+        _activeEngine = activeEngine;
+    }
+
+    public string ResolvePythonExe(EngineDescriptor engine)
     {
         if (OperatingSystem.IsWindows())
         {
-            var venv = Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe");
+            var venv = AppPaths.VenvPython(engine.VenvDir);
             if (File.Exists(venv))
                 return venv;
             if (File.Exists(AppPaths.BundledPythonExe)
-                && File.Exists(Path.Combine(AppPaths.PythonPackages, ".ittalks-ready")))
+                && File.Exists(Path.Combine(engine.PackagesDir, AppPaths.PackagesReadyMarker)))
                 return AppPaths.BundledPythonExe;
         }
 
         return File.Exists(AppPaths.BundledPythonExe) ? AppPaths.BundledPythonExe : "python";
     }
 
-    private static void ApplyPythonPath(ProcessStartInfo psi)
+    private static void ApplyPythonPath(ProcessStartInfo psi, EngineDescriptor engine)
     {
         if (!OperatingSystem.IsWindows())
             return;
-        var venv = Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe");
-        if (File.Exists(venv))
-            return;
-        var marker = Path.Combine(AppPaths.PythonPackages, ".ittalks-ready");
-        if (!File.Exists(marker))
-            return;
-        psi.Environment["PYTHONPATH"] = AppPaths.PythonPackages;
+        if (File.Exists(AppPaths.VenvPython(engine.VenvDir)))
+            return; // venv has its packages installed in-place
+        if (File.Exists(Path.Combine(engine.PackagesDir, AppPaths.PackagesReadyMarker)))
+            psi.Environment["PYTHONPATH"] = engine.PackagesDir;
     }
 
-    public string ResolveWorkerScript()
+    public string ResolveWorkerScript() => ResolveWorkerScript(ActiveEngine);
+
+    public string ResolveWorkerScript(EngineDescriptor engine)
     {
-        var deployed = Path.Combine(AppPaths.WorkerDir, "worker.py");
+        var deployed = Path.Combine(AppPaths.WorkerDir, engine.WorkerScript);
         if (File.Exists(deployed))
             return deployed;
-        var bundled = Path.Combine(AppContext.BaseDirectory, "kokoro_worker", "worker.py");
+        var bundled = Path.Combine(AppContext.BaseDirectory, "kokoro_worker", engine.WorkerScript);
         if (File.Exists(bundled))
             return bundled;
-        var repo = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools", "kokoro_worker", "worker.py"));
+        var repo = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools", "kokoro_worker", engine.WorkerScript));
         return File.Exists(repo) ? repo : deployed;
     }
 
@@ -70,17 +83,19 @@ public sealed class KokoroWorkerSupervisor : IDisposable
     {
         await StopAsync().ConfigureAwait(false);
         LastError = null;
-        State = KokoroServiceState.Starting;
-        var script = ResolveWorkerScript();
+        State = TtsServiceState.Starting;
+
+        var engine = _activeEngine();
+        var script = ResolveWorkerScript(engine);
         if (!File.Exists(script))
         {
-            State = KokoroServiceState.Error;
-            LastError = "worker.py not found. Run Setup from the Voice tab.";
+            State = TtsServiceState.Error;
+            LastError = $"{engine.WorkerScript} not found. Run Setup from the Voice tab.";
             _log(LastError);
             return;
         }
 
-        var python = ResolvePythonExe();
+        var python = ResolvePythonExe(engine);
         var psi = new ProcessStartInfo
         {
             FileName = python,
@@ -92,14 +107,14 @@ public sealed class KokoroWorkerSupervisor : IDisposable
             WorkingDirectory = Path.GetDirectoryName(script) ?? AppPaths.Root
         };
         psi.ArgumentList.Add(script);
-        ApplyPythonPath(psi);
-        psi.Environment["KOKORO_MODEL"] = AppPaths.KokoroOnnx;
-        psi.Environment["KOKORO_VOICES"] = AppPaths.KokoroVoices;
+        ApplyPythonPath(psi, engine);
+        foreach (var (key, value) in engine.EnvVars)
+            psi.Environment[key] = value;
 
         var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
         if (!p.Start())
         {
-            State = KokoroServiceState.Error;
+            State = TtsServiceState.Error;
             LastError = "Failed to start Python worker process.";
             _log(LastError);
             return;
@@ -108,8 +123,8 @@ public sealed class KokoroWorkerSupervisor : IDisposable
         _process = p;
         _stdin = p.StandardInput;
         _stderrTask = Task.Run(() => ReadStdErr(p), cancellationToken);
-        _log($"Worker started (PID {p.Id}).");
-        State = KokoroServiceState.Running;
+        _log($"{engine.DisplayName} worker started (PID {p.Id}).");
+        State = TtsServiceState.Running;
     }
 
     private void ReadStdErr(Process p)
@@ -128,7 +143,7 @@ public sealed class KokoroWorkerSupervisor : IDisposable
 
     public async Task StopAsync()
     {
-        State = KokoroServiceState.Stopped;
+        State = TtsServiceState.Stopped;
         var stdin = _stdin;
         var p = _process;
         _stdin = null;
@@ -200,23 +215,38 @@ public sealed class KokoroWorkerSupervisor : IDisposable
                 return new WorkerResponse { Ok = false, Error = LastError };
             }
 
+            var id = Interlocked.Increment(ref _requestId);
+            request.Id = id;
             var line = JsonSerializer.Serialize(request, WorkerJson.Options);
             await _stdin.WriteLineAsync(line.AsMemory(), cancellationToken).ConfigureAwait(false);
             await _stdin.FlushAsync(cancellationToken).ConfigureAwait(false);
-            var outLine = await _process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(outLine))
-            {
-                LastError = "Empty response from worker.";
-                State = KokoroServiceState.Error;
-                return new WorkerResponse { Ok = false, Error = LastError };
-            }
 
-            return JsonSerializer.Deserialize<WorkerResponse>(outLine, WorkerJson.Options);
+            // Read until we get the response for THIS request. A previous request whose
+            // read was cancelled (e.g. Stop during a slow synth) leaves its response in
+            // the pipe; discard those stale lines instead of mismatching them to later
+            // requests (which caused clips from prior queue rows to play).
+            while (true)
+            {
+                var outLine = await _process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(outLine))
+                {
+                    LastError = "Empty response from worker.";
+                    State = TtsServiceState.Error;
+                    return new WorkerResponse { Ok = false, Error = LastError };
+                }
+
+                var resp = JsonSerializer.Deserialize<WorkerResponse>(outLine, WorkerJson.Options);
+                if (resp is null)
+                    continue;
+                if (resp.Id is { } respId && respId != id)
+                    continue; // stale response from an abandoned request — drop it
+                return resp;
+            }
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
-            State = KokoroServiceState.Error;
+            State = TtsServiceState.Error;
             return new WorkerResponse { Ok = false, Error = ex.Message };
         }
         finally
