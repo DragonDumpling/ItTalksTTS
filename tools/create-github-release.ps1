@@ -15,8 +15,16 @@ if (-not (Test-Path $setup)) {
     throw "Missing $setup. Run .\installer\build.ps1 first."
 }
 
-$credIn = "protocol=https`nhost=github.com`n`n"
-$credOut = $credIn | git credential fill 2>$null
+# Feed git credential via a temp file through cmd's input redirection. Piping a
+# string from PowerShell 5.1 prepends a UTF-8 BOM that breaks git's parser.
+$credTmp = [System.IO.Path]::GetTempFileName()
+[System.IO.File]::WriteAllText($credTmp, "protocol=https`nhost=github.com`n`n", (New-Object System.Text.UTF8Encoding($false)))
+try {
+    $credOut = cmd /c "git credential fill < `"$credTmp`"" 2>$null
+}
+finally {
+    Remove-Item $credTmp -Force -ErrorAction SilentlyContinue
+}
 $token = ($credOut | Where-Object { $_ -like "password=*" } | ForEach-Object { $_ -replace "^password=", "" })
 if (-not $token) { throw "No GitHub token from git credential. Sign in with GitHub Desktop, then retry." }
 
@@ -27,16 +35,19 @@ $headers = @{
 }
 
 $notes = @"
-## What's new in 0.1.2
+## What's new in 0.2.0
 
-- **In-app updates** - update button downloads and installs the latest release automatically
-- **The Q improvements** - copy text, send to Paste, error handling fixes, autoplay continues from selected item
-- **Cursor hooks** - fixed duplicate enqueue when user + project hooks both ran
+- **Switchable TTS engines** - pick your model from the Voice tab
+- **F5-TTS voice cloning** - clone a voice from a short reference clip (optional transcript is auto-detected); installs on demand with GPU auto-detection
+- **Long text fixed** - long pastes (logs, hex, paths) no longer truncate or garble; played in order
+- **Rotating logs on disk** - %LocalAppData%\ItTalksTTS\logs\app.log survives restarts
+- Kokoro stays the lightweight bundled default
 
 ## Install
 
 - Download **ItTalksTTS-Setup.exe** and run the setup
 - First launch downloads Kokoro voice models (internet required)
+- **F5-TTS** is optional: pick it on the Voice tab, then run Setup / Repair (needs system Python 3.10-3.12)
 - **Cursor:** user hooks install automatically — restart Cursor, use Agent mode in any project
 "@
 
