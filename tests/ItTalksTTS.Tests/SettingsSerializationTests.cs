@@ -34,4 +34,14 @@ public class SettingsSerializationTests
         Assert.Equal(@"C:\clips\me.wav", back.F5RefAudioPath);
         Assert.Equal("This is my voice.", back.F5RefText);
     }
+
+    [Fact]
+    public void AppSettings_roundtrips_voice_volume()
+    {
+        var m = new AppSettingsModel { VoiceVolume = 3.0 };
+        var opts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var back = JsonSerializer.Deserialize<AppSettingsModel>(JsonSerializer.Serialize(m, opts), opts);
+        Assert.NotNull(back);
+        Assert.Equal(3.0, back.VoiceVolume);
+    }
 }

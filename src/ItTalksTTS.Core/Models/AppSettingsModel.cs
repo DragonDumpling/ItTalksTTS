@@ -18,6 +18,9 @@ public partial class AppSettingsModel : ObservableObject
 
     [ObservableProperty] private bool autoplay = true;
 
+    /// <summary>Playback gain multiplier (1.0 = source level; default 3.0 compensates for quiet synthesis).</summary>
+    [ObservableProperty] private double voiceVolume = 3.0;
+
     [ObservableProperty] private ObservableCollection<FilterRuleModel> filterRules = new();
 
     [ObservableProperty] private int serviceLogMaxLines = 500;

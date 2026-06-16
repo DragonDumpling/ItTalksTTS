@@ -135,6 +135,12 @@
             <Button Content="Stop engine" Command="{Binding StopEngineCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Refresh voices" Command="{Binding PingWorkerCommand}" Margin="0,0,8,0" Padding="12,6"/>
             <Button Content="Setup / Repair…" Command="{Binding OpenSetupCommand}" Padding="12,6"/>
+            <TextBlock Text="Volume" VerticalAlignment="Center" Margin="24,0,8,0"/>
+            <Slider Width="140" Minimum="0.25" Maximum="5" SmallChange="0.05" LargeChange="0.5"
+                    Value="{Binding Settings.VoiceVolume, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    VerticalAlignment="Center" ValueChanged="VoiceVolume_Changed"
+                    ToolTip="Playback loudness relative to the synthesized audio (100% = unmodified)"/>
+            <TextBlock Text="{Binding Settings.VoiceVolume, StringFormat={}{0:P0}}" VerticalAlignment="Center" Margin="8,0,0,0" MinWidth="40"/>
             <TextBlock Text="{Binding ApiListenInfo}" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>
           </StackPanel>
           <Border Grid.Row="2" Background="#252528" Padding="10,8" CornerRadius="4" Margin="0,0,0,8">

@@ -33,6 +33,8 @@ public sealed class SettingsStore
         {
             if (!doc.RootElement.TryGetProperty("autoplay", out _))
                 model.Autoplay = true;
+            if (!doc.RootElement.TryGetProperty("voiceVolume", out _))
+                model.VoiceVolume = 3.0;
         }
 
         return model;

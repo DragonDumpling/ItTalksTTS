@@ -1,7 +1,7 @@
 # Create a GitHub release and upload release\ItTalksTTS-Setup.exe (uses git credentials / GitHub Desktop login).
 param(
-    [string]$Tag = "v0.1.0",
-    [string]$Title = "ItTalksTTS 0.1.0",
+    [string]$Tag = "v0.2.1",
+    [string]$Title = "ItTalksTTS 0.2.1",
     [string]$Owner = "DragonDumpling",
     [string]$Repo = "ItTalksTTS"
 )
@@ -35,13 +35,11 @@ $headers = @{
 }
 
 $notes = @"
-## What's new in 0.2.0
+## What's new in 0.2.1
 
-- **Switchable TTS engines** - pick your model from the Voice tab
-- **F5-TTS voice cloning** - clone a voice from a short reference clip (optional transcript is auto-detected); installs on demand with GPU auto-detection
-- **Long text fixed** - long pastes (logs, hex, paths) no longer truncate or garble; played in order
-- **Rotating logs on disk** - %LocalAppData%\ItTalksTTS\logs\app.log survives restarts
-- Kokoro stays the lightweight bundled default
+- **Louder playback** - TTS output defaults to 300% gain so speech matches normal system volume
+- **Volume slider** on the Voice tab (25%–500%) — saved automatically, applies to queue and test voice
+- **Startup crash fixed** - app no longer exits immediately on launch when loading the volume control
 
 ## Install
 

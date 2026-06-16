@@ -4,6 +4,7 @@ using ItTalksTTS.Core.Services;
 using ItTalksTTS.Tts;
 using ItTalksTTS.Tts.Protocol;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 
 namespace ItTalksTTS.App.Services;
 
@@ -309,6 +310,11 @@ public sealed class PlaybackService
                 () =>
                 {
                     using var reader = new AudioFileReader(path);
+                    var gain = (float)Math.Clamp(_app.Settings.VoiceVolume, 0.25, 5.0);
+                    ISampleProvider output = reader;
+                    if (Math.Abs(gain - 1f) > 0.001f)
+                        output = new VolumeSampleProvider(reader) { Volume = gain };
+
                     using var wo = new WaveOutEvent();
                     lock (_waveLock)
                     {
@@ -320,7 +326,7 @@ public sealed class PlaybackService
                     RaiseTransport();
                     try
                     {
-                        wo.Init(reader);
+                        wo.Init(output);
                         wo.Play();
                         while (wo.PlaybackState == PlaybackState.Playing || wo.PlaybackState == PlaybackState.Paused)
                         {

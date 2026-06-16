@@ -112,6 +112,13 @@ public partial class MainWindow : Window
 
     private void F5Field_LostFocus(object sender, RoutedEventArgs e) => Vm.SaveSettings();
 
+    private void VoiceVolume_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (DataContext is not MainViewModel)
+            return;
+        Vm.SaveSettings();
+    }
+
     private async void Model_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_engineComboReady || DataContext is not MainViewModel vm)

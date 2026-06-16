@@ -124,6 +124,11 @@
     <Setter Property="Foreground" Value="#EDEDED"/>
   </Style>
 
+  <Style TargetType="Slider">
+    <Setter Property="Foreground" Value="#3B82C4"/>
+    <Setter Property="Background" Value="#5A5A60"/>
+  </Style>
+
   <Style TargetType="DataGrid">
     <Setter Property="Background" Value="#252528"/>
     <Setter Property="Foreground" Value="#E6E6E6"/>
