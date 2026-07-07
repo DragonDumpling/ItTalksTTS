@@ -35,6 +35,10 @@ public sealed class SettingsStore
                 model.Autoplay = true;
             if (!doc.RootElement.TryGetProperty("voiceVolume", out _))
                 model.VoiceVolume = 3.0;
+            if (!doc.RootElement.TryGetProperty("preprocessEnabled", out _))
+                model.PreprocessEnabled = false;
+            if (!doc.RootElement.TryGetProperty("preprocessModelId", out _))
+                model.PreprocessModelId = "llama-3.2-3b-instruct";
         }
 
         return model;

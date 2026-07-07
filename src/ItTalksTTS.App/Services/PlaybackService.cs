@@ -2,11 +2,20 @@ using ItTalksTTS.Core;
 using ItTalksTTS.Core.Models;
 using ItTalksTTS.Core.Services;
 using ItTalksTTS.Tts;
+using ItTalksTTS.Tts.Preprocess;
 using ItTalksTTS.Tts.Protocol;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
 namespace ItTalksTTS.App.Services;
+
+public enum PlaybackPhase
+{
+    Idle,
+    Preprocessing,
+    Synthesizing,
+    Playing
+}
 
 public sealed class PlaybackService
 {
@@ -30,6 +39,19 @@ public sealed class PlaybackService
 
     public bool IsPaused { get; private set; }
 
+    /// <summary>Coarse-grained phase of the current clip — drives the loading/playing status UI.</summary>
+    public PlaybackPhase Phase { get; private set; } = PlaybackPhase.Idle;
+
+    /// <summary>Preview text of the item currently being processed (null when idle).</summary>
+    public string? ActiveItemPreview { get; private set; }
+
+    /// <summary>The text actually being spoken (preprocessed form when preprocessing is on).
+    /// Used for word-by-word highlight during playback.</summary>
+    public string? ActiveSpokenText { get; private set; }
+
+    /// <summary>Playback progress of the current clip, 0.0–1.0 (only meaningful during Playing).</summary>
+    public double PlaybackFraction { get; private set; }
+
     public bool IsAudioOutputting
     {
         get
@@ -43,7 +65,31 @@ public sealed class PlaybackService
 
     public event Action? ClipFinished;
 
+    /// <summary>Raised whenever <see cref="Phase"/> or <see cref="ActiveItemPreview"/> changes.</summary>
+    public event Action? PhaseChanged;
+
+    /// <summary>Raised when <see cref="ActiveSpokenText"/> changes (a new clip starts loading).</summary>
+    public event Action? ActiveSpokenTextChanged;
+
+    /// <summary>Raised repeatedly during audio playback with the current 0.0–1.0 fraction, for word highlighting.</summary>
+    public event Action<double>? SpeakProgress;
+
     private void RaiseTransport() => PlaybackStateChanged?.Invoke();
+
+    private void SetPhase(PlaybackPhase phase, QueueItemModel? item)
+    {
+        Phase = phase;
+        ActiveItemPreview = item?.Preview;
+        if (phase == PlaybackPhase.Idle)
+        {
+            ActiveSpokenText = null;
+            PlaybackFraction = 0;
+            ActiveSpokenTextChanged?.Invoke();
+            SpeakProgress?.Invoke(0.0);
+        }
+        PhaseChanged?.Invoke();
+        RaiseTransport();
+    }
 
     public async Task PauseAsync()
     {
@@ -198,33 +244,59 @@ public sealed class PlaybackService
         if (item.State != QueueItemState.Pending)
             return;
         _app.Queue.SetState(id, QueueItemState.Playing);
+        SetPhase(_app.Settings.PreprocessEnabled ? PlaybackPhase.Preprocessing : PlaybackPhase.Synthesizing, item);
         string? wav = null;
+        // Whether to fire ClipFinished after this clip to advance the autoplay chain.
+        // Stays false on Stop/cancel and when the engine is down; true on success and on
+        // mid-clip errors so a single bad row doesn't stall the rest of the queue.
+        var advanceChain = false;
         try
         {
             if (_app.Worker.State != TtsServiceState.Running)
             {
                 _app.Queue.SetState(id, QueueItemState.Pending, null);
                 _log("Playback skipped: start the TTS engine on the Voice tab to hear speech.");
-                return;
+                return; // engine down — TryAutoplayChainAsync will stop on its own
             }
 
+            var prepText = await PreprocessTextAsync(item.Text, token).ConfigureAwait(false);
+            if (token.IsCancellationRequested)
+            {
+                _app.Queue.SetState(id, QueueItemState.Pending, null);
+                return; // Stop — don't chain
+            }
+
+            // The text actually being spoken (post-preprocess) — drives word highlighting.
+            ActiveSpokenText = prepText;
+            ActiveSpokenTextChanged?.Invoke();
+
+            SetPhase(PlaybackPhase.Synthesizing, item);
             var resp = await _app.Worker.SendAsync(
-                BuildSynthesizeRequest(item.Text),
+                BuildSynthesizeRequest(prepText),
                 token).ConfigureAwait(false);
+
+            if (token.IsCancellationRequested)
+            {
+                _app.Queue.SetState(id, QueueItemState.Pending, null);
+                return; // Stop — don't chain (was cancelled mid-synth)
+            }
+
             if (resp is not { Ok: true } || string.IsNullOrEmpty(resp.Wav))
             {
                 var reason = resp?.Error ?? "Synthesis failed.";
                 _log($"Synthesis failed (len {item.Text.Length}): {Summarize(reason)}");
                 _app.Queue.SetState(id, QueueItemState.Error, reason);
+                // Skip past the errored row so the rest of the queue still plays.
+                advanceChain = _app.Worker.State == TtsServiceState.Running;
                 return;
             }
 
             wav = resp.Wav;
+            SetPhase(PlaybackPhase.Playing, item);
             await PlayWavFileAsync(wav, token).ConfigureAwait(false);
             _app.Queue.SetState(id, QueueItemState.Played);
             _lastCompletedId = id;
-            if (!_suppressAutoplay)
-                ClipFinished?.Invoke();
+            advanceChain = !_suppressAutoplay;
         }
         catch (OperationCanceledException)
         {
@@ -233,8 +305,14 @@ public sealed class PlaybackService
         }
         catch (Exception ex)
         {
+            if (token.IsCancellationRequested)
+            {
+                _app.Queue.SetState(id, QueueItemState.Pending);
+                throw new OperationCanceledException(token);
+            }
             _log($"Playback error (len {item.Text.Length}): {Summarize(ex.Message)}");
             _app.Queue.SetState(id, QueueItemState.Error, ex.Message);
+            advanceChain = _app.Worker.State == TtsServiceState.Running;
         }
         finally
         {
@@ -249,6 +327,10 @@ public sealed class PlaybackService
                     /* ignore */
                 }
             }
+
+            SetPhase(PlaybackPhase.Idle, null);
+            if (advanceChain)
+                ClipFinished?.Invoke();
         }
     }
 
@@ -304,6 +386,34 @@ public sealed class PlaybackService
         return text.Length > 400 ? text[..400] + "…" : text;
     }
 
+    /// <summary>
+    /// Rewrite text into a speech-friendly form when preprocessing is enabled. Falls
+    /// back to the original text on any failure or timeout so speech is never blocked.
+    /// The original queue text is left untouched — only what's spoken changes.
+    /// </summary>
+    private async Task<string> PreprocessTextAsync(string text, CancellationToken token)
+    {
+        if (!_app.Settings.PreprocessEnabled)
+            return text;
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+        if (_app.Preprocess.State != PreprocessState.Running)
+            return text;
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            cts.CancelAfter(TimeSpan.FromSeconds(20));
+            var rewritten = await _app.Preprocess.PreprocessAsync(text, cts.Token).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(rewritten) ? text : rewritten;
+        }
+        catch (Exception ex)
+        {
+            _log($"Preprocess skipped (using original): {Summarize(ex.Message)}");
+            return text;
+        }
+    }
+
     private async Task PlayWavFileAsync(string path, CancellationToken token)
     {
         await Task.Run(
@@ -316,6 +426,7 @@ public sealed class PlaybackService
                         output = new VolumeSampleProvider(reader) { Volume = gain };
 
                     using var wo = new WaveOutEvent();
+                    var totalTime = reader.TotalTime;
                     lock (_waveLock)
                     {
                         _activeWaveOut = wo;
@@ -324,6 +435,7 @@ public sealed class PlaybackService
                     }
 
                     RaiseTransport();
+                    SpeakProgress?.Invoke(0.0);
                     try
                     {
                         wo.Init(output);
@@ -331,11 +443,22 @@ public sealed class PlaybackService
                         while (wo.PlaybackState == PlaybackState.Playing || wo.PlaybackState == PlaybackState.Paused)
                         {
                             token.ThrowIfCancellationRequested();
+                            if (wo.PlaybackState == PlaybackState.Playing && totalTime > TimeSpan.Zero)
+                            {
+                                var ct = reader.CurrentTime;
+                                var f = ct / totalTime;
+                                if (f < 0) f = 0;
+                                if (f > 1) f = 1;
+                                PlaybackFraction = f;
+                                SpeakProgress?.Invoke(f);
+                            }
                             Thread.Sleep(40);
                         }
                     }
                     finally
                     {
+                        SpeakProgress?.Invoke(1.0);
+                        PlaybackFraction = 0;
                         lock (_waveLock)
                         {
                             if (ReferenceEquals(_activeWaveOut, wo))

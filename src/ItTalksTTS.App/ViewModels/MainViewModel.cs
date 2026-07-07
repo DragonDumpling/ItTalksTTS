@@ -9,6 +9,7 @@ using ItTalksTTS.Core;
 using ItTalksTTS.Core.Models;
 using ItTalksTTS.Core.Services;
 using ItTalksTTS.Tts;
+using ItTalksTTS.Tts.Preprocess;
 using ItTalksTTS.Tts.Protocol;
 
 namespace ItTalksTTS.App.ViewModels;
@@ -24,6 +25,29 @@ public partial class MainViewModel : ObservableObject
     private readonly AppUpdateService _appUpdate = new();
 
     public ObservableCollection<string> Voices { get; } = new();
+
+    /// <summary>Local models offered for speech-friendly preprocessing (bound to the Voice-tab dropdown).</summary>
+    public IReadOnlyList<PreprocessModelOption> PreprocessModelOptions { get; } =
+        PreprocessModelRegistry.All.Select(PreprocessModelOption.From).ToList();
+
+    [ObservableProperty] private string preprocessStatusText = "Not installed";
+    [ObservableProperty] private bool preprocessIsInstalled;
+    [ObservableProperty] private bool preprocessIsBusy;
+    [ObservableProperty] private string preprocessInstallLabel = "Install";
+    [ObservableProperty] private Brush preprocessStatusBrush = Brushes.IndianRed;
+
+    // --- Playback loading/playing phase (drives the inline State-column progress + Now speaking panel) ---
+    [ObservableProperty] private bool isPreprocessing;
+    [ObservableProperty] private bool isSynthesizing;
+    [ObservableProperty] private string activePhaseShort = "";
+    [ObservableProperty] private double activePlaybackFraction;
+    [ObservableProperty] private bool isSpeaking;
+
+    /// <summary>Words of the clip currently being spoken, for karaoke-style highlight.</summary>
+    public ObservableCollection<SpeakWord> SpeakWords { get; } = new();
+
+    /// <summary>True while the active clip is loading (preprocessing or synthesizing).</summary>
+    public bool ActiveItemIsLoading => IsPreprocessing || IsSynthesizing;
 
     public string BuildLabel => AppBuildInfo.ShortLabel;
 
@@ -61,8 +85,12 @@ public partial class MainViewModel : ObservableObject
         _svc = svc;
         _svc.Playback.ClipFinished += OnClipFinished;
         _svc.Playback.PlaybackStateChanged += OnPlaybackStateChanged;
+        _svc.Playback.PhaseChanged += OnPhaseChanged;
+        _svc.Playback.ActiveSpokenTextChanged += OnActiveSpokenTextChanged;
+        _svc.Playback.SpeakProgress += OnSpeakProgress;
         RefreshSetupGate();
         RefreshCursorHooksStatus();
+        RefreshPreprocessStatus();
         _ = RefreshVoicesInternalAsync();
     }
 
@@ -78,6 +106,74 @@ public partial class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(IsPlaybackActive));
             OnPropertyChanged(nameof(PlayPauseButtonLabel));
         });
+
+    private void OnPhaseChanged() =>
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            IsPreprocessing = _svc.Playback.Phase == PlaybackPhase.Preprocessing;
+            IsSynthesizing = _svc.Playback.Phase == PlaybackPhase.Synthesizing;
+            ActivePhaseShort = _svc.Playback.Phase switch
+            {
+                PlaybackPhase.Preprocessing => "Pre",
+                PlaybackPhase.Synthesizing => "TTS",
+                PlaybackPhase.Playing => "Playing",
+                _ => ""
+            };
+            if (_svc.Playback.Phase != PlaybackPhase.Playing)
+                ActivePlaybackFraction = 0;
+            IsSpeaking = _svc.Playback.Phase == PlaybackPhase.Playing;
+            OnPropertyChanged(nameof(ActiveItemIsLoading));
+        });
+
+    private void OnActiveSpokenTextChanged() =>
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            SpeakWords.Clear();
+            _currentWordIndex = -1;
+            var text = _svc.Playback.ActiveSpokenText ?? "";
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+            foreach (var w in text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                SpeakWords.Add(new SpeakWord(w));
+        });
+
+    private int _currentWordIndex = -1;
+
+    private void OnSpeakProgress(double fraction)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            ActivePlaybackFraction = fraction;
+            if (SpeakWords.Count == 0)
+                return;
+            // Map the playback fraction to a word index, weighted by word length so
+            // longer words get proportionally more time — a decent approximation
+            // without real word timestamps from the TTS engine.
+            var totalLen = 0;
+            foreach (var w in SpeakWords) totalLen += w.Text.Length;
+            if (totalLen == 0)
+                return;
+            var target = fraction * totalLen;
+            var acc = 0;
+            var idx = SpeakWords.Count - 1;
+            for (var i = 0; i < SpeakWords.Count; i++)
+            {
+                acc += SpeakWords[i].Text.Length;
+                if (target <= acc) { idx = i; break; }
+            }
+
+            if (idx == _currentWordIndex)
+                return;
+            if (_currentWordIndex >= 0 && _currentWordIndex < SpeakWords.Count)
+                SpeakWords[_currentWordIndex].IsCurrent = false;
+            _currentWordIndex = idx;
+            if (idx >= 0 && idx < SpeakWords.Count)
+                SpeakWords[idx].IsCurrent = true;
+        });
+    }
+
+    /// <summary>True while a clip is loading (preprocessing or synthesizing) but not yet playing.</summary>
+    public bool IsProcessingPhase => IsPreprocessing || IsSynthesizing;
 
     public bool IsPlaybackActive => _svc.Playback.IsPlaying;
 
@@ -171,6 +267,110 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private void SaveFilters() => _svc.PersistSettings();
+
+    // --- Optional speech-friendly preprocessing (local ~3B model) ---
+
+    public void RefreshPreprocessStatus()
+    {
+        var model = PreprocessModelRegistry.FromId(Settings.PreprocessModelId);
+        PreprocessIsInstalled = _svc.PreprocessSetup.IsInstalled(model);
+        PreprocessInstallLabel = PreprocessIsBusy
+            ? "Installing…"
+            : PreprocessIsInstalled ? "Reinstall" : "Install";
+        PreprocessStatusText = PreprocessIsBusy
+            ? "Installing…"
+            : PreprocessIsInstalled
+                ? (_svc.Preprocess.State == PreprocessState.Running ? "Running" : "Installed")
+                : "Not installed";
+        PreprocessStatusBrush = PreprocessIsBusy
+            ? Brushes.Gold
+            : _svc.Preprocess.State == PreprocessState.Running
+                ? Brushes.LimeGreen
+                : PreprocessIsInstalled ? Brushes.SteelBlue : Brushes.IndianRed;
+        OnPropertyChanged(nameof(CanTogglePreprocess));
+    }
+
+    public bool CanTogglePreprocess => PreprocessIsInstalled && !PreprocessIsBusy;
+
+    partial void OnPreprocessIsInstalledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanTogglePreprocess));
+    }
+
+    partial void OnPreprocessIsBusyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanTogglePreprocess));
+        RefreshPreprocessStatus();
+    }
+
+    /// <summary>Called from the checkbox toggle: persist and warm/stop the worker.</summary>
+    public async Task OnPreprocessEnabledToggledAsync()
+    {
+        _svc.PersistSettings();
+        if (Settings.PreprocessEnabled)
+        {
+            await _svc.StartPreprocessIfEnabledAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            await _svc.Preprocess.StopAsync().ConfigureAwait(true);
+        }
+        RefreshPreprocessStatus();
+    }
+
+    /// <summary>Called when the preprocess model dropdown changes: persist and restart the worker if running.</summary>
+    public async Task OnPreprocessModelChangedAsync()
+    {
+        _svc.PersistSettings();
+        if (_svc.Preprocess.State == PreprocessState.Running)
+        {
+            await _svc.Preprocess.StopAsync().ConfigureAwait(true);
+            await _svc.StartPreprocessIfEnabledAsync().ConfigureAwait(true);
+        }
+        RefreshPreprocessStatus();
+    }
+
+    [RelayCommand]
+    private async Task InstallPreprocessAsync()
+    {
+        if (PreprocessIsBusy)
+            return;
+        var model = PreprocessModelRegistry.FromId(Settings.PreprocessModelId);
+        PreprocessIsBusy = true;
+        PreprocessInstallLabel = "Installing…";
+        try
+        {
+            var progress = new Progress<(string step, double? fraction)>(p =>
+            {
+                _svc.Log.Append($"Preprocess: {p.step}");
+                PreprocessStatusText = p.step;
+            });
+            await _svc.PreprocessSetup.InstallAsync(model, progress, CancellationToken.None).ConfigureAwait(true);
+            _svc.Log.Append($"Preprocess: {model.DisplayName} ready.");
+            // Auto-start the worker if the toggle is on.
+            if (Settings.PreprocessEnabled)
+                await _svc.StartPreprocessIfEnabledAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _svc.Log.Append("Preprocess install failed: " + ex.Message);
+            System.Windows.MessageBox.Show(
+                _owner,
+                "Could not install the preprocessing model:\n\n" + ex.Message
+                    + "\n\nThis needs a system Python 3.10–3.13 on PATH and an internet connection."
+                    + " The llama-cpp-python wheel is pulled from its prebuilt Windows index —"
+                    + " if your Python is too new or too old, install Python 3.11 or 3.12 from python.org"
+                    + " (tick \"Add python.exe to PATH\") and try again.",
+                "Preprocess install",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        finally
+        {
+            PreprocessIsBusy = false;
+            RefreshPreprocessStatus();
+        }
+    }
 
     [RelayCommand]
     private async Task StartEngineAsync()

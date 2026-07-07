@@ -1,0 +1,5 @@
+# Preprocessing worker dependencies.
+# llama-cpp-python ships prebuilt CPU wheels; for GPU see install flags in
+# PreprocessSetupService. Kept separate from the TTS engines' requirements so the
+# preprocess venv stays small and independent.
+llama-cpp-python>=0.3.2

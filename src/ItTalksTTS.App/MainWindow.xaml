@@ -73,6 +73,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -143,7 +144,64 @@
             <TextBlock Text="{Binding Settings.VoiceVolume, StringFormat={}{0:P0}}" VerticalAlignment="Center" Margin="8,0,0,0" MinWidth="40"/>
             <TextBlock Text="{Binding ApiListenInfo}" Margin="24,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>
           </StackPanel>
-          <Border Grid.Row="2" Background="#252528" Padding="10,8" CornerRadius="4" Margin="0,0,0,8">
+          <Border Grid.Row="2" Background="#1E2A22" Padding="10,8" CornerRadius="4" Margin="0,0,0,8">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <CheckBox x:Name="PreprocessToggle"
+                          Content="Make speech natural"
+                          IsChecked="{Binding Settings.PreprocessEnabled, Mode=TwoWay}"
+                          IsEnabled="{Binding CanTogglePreprocess}"
+                          Checked="PreprocessToggle_Changed" Unchecked="PreprocessToggle_Changed"
+                          VerticalAlignment="Center"
+                          ToolTipService.ShowDuration="20000">
+                  <CheckBox.ToolTip>
+                    <TextBlock MaxWidth="420" TextWrapping="Wrap">
+                      <Run FontWeight="Bold">Make speech natural (optional, local model)</Run><LineBreak/>
+                      Runs a small ~3B open-source model on your machine that rewrites text<LineBreak/>
+                      before it reaches the TTS engine, so listening to AI output is easier on the ears.<LineBreak/>
+                      <LineBreak/>
+                      It strips markdown, code blocks, and emoji; writes numbers, dates, and<LineBreak/>
+                      abbreviations the way you'd say them ("twenty-three", "March fifteenth",<LineBreak/>
+                      "A-P-I"); turns long unreadable strings like URLs, API keys, hashes, and<LineBreak/>
+                      file paths into short spoken labels ("a link", "an API key", "the file<LineBreak/>
+                      playback dot cs"); and tightens verbose phrasing into something closer to<LineBreak/>
+                      how a person would say it. The original queue text is never changed — only<LineBreak/>
+                      what's spoken.<LineBreak/>
+                      <LineBreak/>
+                      Off by default. Turn it on if you listen to Cursor/Claude/ChatGPT replies and<LineBreak/>
+                      want them to sound natural instead of like a wall of text. Requires a one-time<LineBreak/>
+                      ~2 GB model download and a system Python 3.10–3.12.
+                    </TextBlock>
+                  </CheckBox.ToolTip>
+                </CheckBox>
+                <TextBlock Text="Model" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                <controls:ThemedComboBox x:Name="PreprocessModelCombo" Width="200" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+                                         ItemsSource="{Binding PreprocessModelOptions}"
+                                         DisplayMemberPath="Display"
+                                         SelectedValuePath="Id"
+                                         SelectedValue="{Binding Settings.PreprocessModelId}"
+                                         IsEditable="False"
+                                         SelectionChanged="PreprocessModel_SelectionChanged"
+                                         ToolTipService.ShowDuration="15000">
+                  <ComboBox.ToolTip>
+                    <TextBlock MaxWidth="360" TextWrapping="Wrap">
+                      <Run FontWeight="Bold">Local preprocessing model</Run><LineBreak/>
+                      Which ~3B GGUF model to use for rewriting text into spoken form.<LineBreak/>
+                      All run on CPU via llama-cpp-python. Change requires the model to be<LineBreak/>
+                      installed (click Install). Different models trade size for tone.
+                    </TextBlock>
+                  </ComboBox.ToolTip>
+                </controls:ThemedComboBox>
+                <Button Content="{Binding PreprocessInstallLabel}" Command="{Binding InstallPreprocessCommand}" Margin="8,0,0,0" Padding="10,4"
+                        ToolTip="Download the selected model (~2 GB) and prepare its Python environment"/>
+                <Ellipse Width="10" Height="10" Margin="14,0,6,0" Fill="{Binding PreprocessStatusBrush}"/>
+                <TextBlock Text="{Binding PreprocessStatusText}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Subtitle}"/>
+              </StackPanel>
+              <TextBlock Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"
+                         Text="Optional. Rewrites text with a local ~3B model before speech so AI output sounds natural: markdown/code/emoji removed, numbers/dates/abbreviations spoken aloud, URLs &amp; API keys &amp; long paths replaced with short labels, verbose text tightened. Original queue text is never changed."/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="3" Background="#252528" Padding="10,8" CornerRadius="4" Margin="0,0,0,8">
             <StackPanel>
               <TextBlock Text="{Binding CursorHooksStatus}" Foreground="{DynamicResource Brush.Subtitle}" TextWrapping="Wrap"/>
               <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
@@ -154,13 +212,13 @@
               </StackPanel>
             </StackPanel>
           </Border>
-          <Border Grid.Row="3" Visibility="{Binding SetupRequired, Converter={StaticResource BoolToVis}}" Background="#2D2D1F" Padding="10" CornerRadius="4" Margin="0,0,0,8">
+          <Border Grid.Row="4" Visibility="{Binding SetupRequired, Converter={StaticResource BoolToVis}}" Background="#2D2D1F" Padding="10" CornerRadius="4" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Models or worker missing. " VerticalAlignment="Center"/>
               <Button Content="Run guided setup" Command="{Binding OpenSetupCommand}" Padding="10,4"/>
             </StackPanel>
           </Border>
-          <GroupBox Grid.Row="4" Header="Service log" Foreground="{DynamicResource Brush.Text}">
+          <GroupBox Grid.Row="5" Header="Service log" Foreground="{DynamicResource Brush.Text}">
             <Grid>
               <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
@@ -203,19 +261,70 @@
                        Background="#1F1F22" BorderThickness="0"/>
             </Grid>
           </Border>
+          <Border DockPanel.Dock="Bottom" Background="#252528" Padding="8" CornerRadius="4" Margin="0,8,0,0"
+                  Visibility="{Binding IsSpeaking, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+              <TextBlock Text="Now speaking" Foreground="{DynamicResource Brush.Subtitle}" FontSize="11" Margin="0,0,0,4"/>
+              <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding SpeakWords}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel ItemHeight="22" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Text}" FontSize="13" Margin="3,0,0,0">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Foreground" Value="#E4E4E4"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                <Setter Property="Background" Value="#4A9A4A"/>
+                                <Setter Property="Foreground" Value="#0F1A0F"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </StackPanel>
+          </Border>
           <DataGrid x:Name="QueueGrid" ItemsSource="{Binding QueueItems}" AutoGenerateColumns="False" CanUserAddRows="False"
                     SelectionMode="Extended" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                     SelectionChanged="QueueGrid_SelectionChanged">
             <DataGrid.Columns>
               <DataGridTextColumn Header="Preview" Binding="{Binding Preview}" Width="*" CellStyle="{StaticResource QueueCellStyle}"/>
               <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="120" CellStyle="{StaticResource QueueCellStyle}"/>
-              <DataGridTextColumn Header="State" Binding="{Binding State}" Width="90" CellStyle="{StaticResource QueueCellStyle}">
-                <DataGridTextColumn.ElementStyle>
-                  <Style TargetType="TextBlock">
-                    <Setter Property="ToolTip" Value="{Binding ErrorMessage}"/>
-                  </Style>
-                </DataGridTextColumn.ElementStyle>
-              </DataGridTextColumn>
+              <DataGridTemplateColumn Header="State" Width="150" CellStyle="{StaticResource QueueCellStyle}">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Grid VerticalAlignment="Center" Margin="0,2">
+                      <TextBlock x:Name="StateText" Text="{Binding State}" VerticalAlignment="Center"
+                                 ToolTip="{Binding ErrorMessage}"/>
+                      <StackPanel x:Name="PhaseView" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Text="{Binding DataContext.ActivePhaseShort, RelativeSource={RelativeSource AncestorType=Window}}"
+                                   VerticalAlignment="Center" Margin="0,0,5,0" FontWeight="SemiBold" MinWidth="42"/>
+                        <ProgressBar Width="80" Height="9" VerticalAlignment="Center"
+                                     Minimum="0" Maximum="1"
+                                     IsIndeterminate="{Binding DataContext.ActiveItemIsLoading, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                     Value="{Binding DataContext.ActivePlaybackFraction, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"/>
+                      </StackPanel>
+                    </Grid>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding State}" Value="{x:Static models:QueueItemState.Playing}">
+                        <Setter TargetName="StateText" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="PhaseView" Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
               <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="160" CellStyle="{StaticResource QueueCellStyle}"/>
               <DataGridTemplateColumn Header="" Width="90" CellStyle="{StaticResource QueueCellStyle}">
                 <DataGridTemplateColumn.CellTemplate>

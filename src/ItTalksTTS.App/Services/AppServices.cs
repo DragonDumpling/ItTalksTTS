@@ -6,6 +6,7 @@ using ItTalksTTS.Core;
 using ItTalksTTS.Core.Models;
 using ItTalksTTS.Core.Services;
 using ItTalksTTS.Tts;
+using ItTalksTTS.Tts.Preprocess;
 
 namespace ItTalksTTS.App.Services;
 
@@ -27,6 +28,11 @@ public sealed class AppServices
 
     public KokoroSetupService Setup { get; }
 
+    /// <summary>Optional local-LLM speech-friendly text preprocessor (independent of TTS engine).</summary>
+    public PreprocessSetupService PreprocessSetup { get; }
+
+    public PreprocessSupervisor Preprocess { get; }
+
     public PlaybackService Playback { get; }
 
     public LocalApiServer Api { get; }
@@ -38,6 +44,12 @@ public sealed class AppServices
         void LogLine(string s) => Log.Append(s);
         Worker = new WorkerSupervisor(LogLine, () => EngineRegistry.FromKey(Settings?.SelectedModel));
         Setup = new KokoroSetupService(LogLine);
+        PreprocessSetup = new PreprocessSetupService(LogLine);
+        Preprocess = new PreprocessSupervisor(
+            LogLine,
+            () => Settings is null ? null : PreprocessModelRegistry.FromId(Settings.PreprocessModelId),
+            () => PreprocessSetup.ResolvePythonExe(),
+            () => PreprocessSetupService.ResolveWorkerScript());
         Playback = new PlaybackService(this, LogLine);
         Api = new LocalApiServer(Queue, () => Settings, SettingsStore, OnItemEnqueuedViaApi);
     }
@@ -63,6 +75,24 @@ public sealed class AppServices
         Queue.LoadFromDisk();
         // Keep the deployed worker script in sync with this build (e.g. after an update).
         Setup.TryRefreshDeployedWorkerScripts();
+        // If preprocessing was on last session and the model is still installed, warm it up.
+        _ = StartPreprocessIfEnabledAsync();
+    }
+
+    /// <summary>Starts the preprocessing worker when enabled + installed; no-op otherwise.</summary>
+    public async Task StartPreprocessIfEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        if (!Settings.PreprocessEnabled)
+            return;
+        if (Preprocess.State == PreprocessState.Running || Preprocess.State == PreprocessState.Starting)
+            return;
+        var model = PreprocessModelRegistry.FromId(Settings.PreprocessModelId);
+        if (!PreprocessSetup.IsInstalled(model))
+        {
+            Log.Append("Preprocess: enabled but not installed — use Install on the Voice tab.");
+            return;
+        }
+        await Preprocess.StartAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public void PersistSettings() => SettingsStore.Save(Settings);
@@ -104,6 +134,22 @@ public sealed class AppServices
             try
             {
                 Log.Append("Shutdown: worker stop failed: " + ex.Message);
+            }
+            catch
+            {
+                /* ignore */
+            }
+        }
+
+        try
+        {
+            await Preprocess.StopAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                Log.Append("Shutdown: preprocess stop failed: " + ex.Message);
             }
             catch
             {

@@ -53,5 +53,21 @@ public static class AppPaths
     /// <summary>The python.exe inside a Windows venv directory.</summary>
     public static string VenvPython(string venvDir) => Path.Combine(venvDir, "Scripts", "python.exe");
 
+    // --- Optional preprocessing LLM (separate from the TTS engines) ---
+
+    public static string PreprocessDir => Path.Combine(Root, "preprocess");
+
+    public static string PreprocessVenv => Path.Combine(PreprocessDir, "venv");
+
+    public static string PreprocessPackages => Path.Combine(PreprocessDir, "packages");
+
+    public static string PreprocessModelsDir => Path.Combine(PreprocessDir, "models");
+
+    /// <summary>Marker written once the preprocessing venv + model are ready.</summary>
+    public static string PreprocessReadyMarker => Path.Combine(PreprocessDir, ".ready");
+
+    /// <summary>Resolved per-model GGUF path under <see cref="PreprocessModelsDir"/>.</summary>
+    public static string PreprocessModelFile(string fileName) => Path.Combine(PreprocessModelsDir, fileName);
+
     public static void EnsureRoot() => Directory.CreateDirectory(Root);
 }

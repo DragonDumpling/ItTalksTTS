@@ -65,6 +65,13 @@ public partial class MainWindow : Window
         await Vm.RunFirstLaunchSetupIfNeededAsync().ConfigureAwait(true);
         Vm.EnsureCursorHooksInstalled();
         _ = Vm.CheckForUpdatesAsync();
+        // The preprocess worker auto-starts (if enabled+installed) during Initialize,
+        // which races the VM construction. Re-check once it's had a moment to come up.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(() => Vm.RefreshPreprocessStatus());
+        });
     }
 
     private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -126,5 +133,22 @@ public partial class MainWindow : Window
         if (ModelCombo.SelectedValue is string key)
             vm.Settings.SelectedModel = key;
         await vm.OnEngineChangedAsync().ConfigureAwait(true);
+    }
+
+    private async void PreprocessToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+        SfxService.PlayButton();
+        await vm.OnPreprocessEnabledToggledAsync().ConfigureAwait(true);
+    }
+
+    private async void PreprocessModel_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+        if (PreprocessModelCombo.SelectedValue is string id)
+            vm.Settings.PreprocessModelId = id;
+        await vm.OnPreprocessModelChangedAsync().ConfigureAwait(true);
     }
 }
