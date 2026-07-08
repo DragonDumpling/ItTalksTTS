@@ -1,7 +1,7 @@
 # Create a GitHub release and upload release\ItTalksTTS-Setup.exe (uses git credentials / GitHub Desktop login).
 param(
-    [string]$Tag = "v0.2.1",
-    [string]$Title = "ItTalksTTS 0.2.1",
+    [string]$Tag = "v0.3.0",
+    [string]$Title = "ItTalksTTS 0.3.0",
     [string]$Owner = "DragonDumpling",
     [string]$Repo = "ItTalksTTS"
 )
@@ -35,17 +35,29 @@ $headers = @{
 }
 
 $notes = @"
-## What's new in 0.2.1
+## What's new in 0.3.0
 
-- **Louder playback** - TTS output defaults to 300% gain so speech matches normal system volume
-- **Volume slider** on the Voice tab (25%–500%) — saved automatically, applies to queue and test voice
-- **Startup crash fixed** - app no longer exits immediately on launch when loading the volume control
+- **Optional speech preprocessing** — install a small (3B) open-source LLM that runs
+  locally and rewrites text before it's spoken. Makes Cursor/Claude output sound more
+  natural and shorter, and replaces ear-fatiguing blobs (API keys, hashes, URLs) with
+  spoken descriptions. Fully optional, with a tooltip explaining what it does. Voice tab.
+- **Word-by-word highlighting** in the Selected text field as each word is spoken. When
+  preprocessing is on, timing is baked from per-word syllable counts for accurate
+  highlighting; falls back to length-based estimates when off.
+- **Per-phase progress in The Q** — the State column now shows an inline progress bar
+  with a short label (Pre / TTS / Playing) for the current clip instead of jumping to Playing.
+- **Fixed: queue stalled on Pending** — stopping while a clip was synthesizing no longer
+  marks the TTS worker as broken, so playback continues to work for later clips.
+- **Fixed: selected row unreadable** — selecting a row and clicking Play selected no
+  longer turns the row white when the grid loses focus.
+- Preserves the original text layout (line breaks, separators) in the Selected text view.
 
 ## Install
 
 - Download **ItTalksTTS-Setup.exe** and run the setup
 - First launch downloads Kokoro voice models (internet required)
 - **F5-TTS** is optional: pick it on the Voice tab, then run Setup / Repair (needs system Python 3.10-3.12)
+- **Speech preprocessing** is optional: enable it on the Voice tab, then Install (needs system Python 3.10-3.13; downloads a ~2GB GGUF model on first setup)
 - **Cursor:** user hooks install automatically — restart Cursor, use Agent mode in any project
 "@
 
