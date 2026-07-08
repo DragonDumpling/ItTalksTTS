@@ -255,10 +255,12 @@
                 <RowDefinition Height="*"/>
               </Grid.RowDefinitions>
               <TextBlock Grid.Row="0" Text="Selected text (select and copy, or use buttons above)" Foreground="{DynamicResource Brush.Subtitle}" FontSize="11" Margin="0,0,0,4"/>
-              <TextBox Grid.Row="1" Text="{Binding SelectedQueueText, Mode=OneWay}" IsReadOnly="True"
-                       AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                       MinHeight="72" MaxHeight="160" FontSize="12" Padding="6"
-                       Background="#1F1F22" BorderThickness="0"/>
+              <FlowDocumentScrollViewer Grid.Row="1" Document="{Binding DisplayDocument}"
+                                        IsSelectionEnabled="True"
+                                        VerticalScrollBarVisibility="Auto"
+                                        MinHeight="72" MaxHeight="200" Padding="6"
+                                        Background="#1F1F22" BorderThickness="0"
+                                        FontFamily="Segoe UI" FontSize="13"/>
             </Grid>
           </Border>
           <Border DockPanel.Dock="Bottom" Background="#252528" Padding="8" CornerRadius="4" Margin="0,8,0,0"
@@ -298,6 +300,15 @@
           <DataGrid x:Name="QueueGrid" ItemsSource="{Binding QueueItems}" AutoGenerateColumns="False" CanUserAddRows="False"
                     SelectionMode="Extended" IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                     SelectionChanged="QueueGrid_SelectionChanged">
+            <!-- Keep selected rows readable when focus leaves the grid (e.g. after clicking
+                 "Play selected"): without these overrides the inactive-selection brush is a
+                 light system color that washes out the light-gray cell text. -->
+            <DataGrid.Resources>
+              <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2A3A5A"/>
+              <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#2A3340"/>
+              <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#E4E4E4"/>
+              <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#E4E4E4"/>
+            </DataGrid.Resources>
             <DataGrid.Columns>
               <DataGridTextColumn Header="Preview" Binding="{Binding Preview}" Width="*" CellStyle="{StaticResource QueueCellStyle}"/>
               <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="120" CellStyle="{StaticResource QueueCellStyle}"/>

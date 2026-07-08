@@ -233,13 +233,40 @@ def _ensure_model():
     return _prep
 
 
-def _rewrite(text: str) -> str:
-    # Short or whitespace-only input isn't worth a model round-trip.
+def _count_syllables(word: str) -> int:
+    """Rough English syllable estimate — vowel-group counting with a silent-e / -le
+    correction. Used only as a per-word duration weight for highlight timing, so it
+    doesn't need to be phonetically perfect, just better than character length."""
+    word = re.sub(r"[^A-Za-z]", "", word).lower()
+    if not word:
+        return 0
+    vowels = "aeiouy"
+    count = 0
+    prev_v = False
+    for ch in word:
+        is_v = ch in vowels
+        if is_v and not prev_v:
+            count += 1
+        prev_v = is_v
+    if word.endswith("e") and count > 1:
+        count -= 1
+    if word.endswith("le") and len(word) > 2 and word[-3] not in vowels:
+        count += 1
+    return max(count, 1)
+
+
+def _word_weights(text: str) -> list[int]:
+    """Per-word syllable counts aligned to ``text.split()`` (whitespace split). The host
+    splits the same way, so indices line up with the word Runs it builds for highlighting."""
+    return [_count_syllables(w) for w in text.split()]
+
+
+def _rewrite(text: str) -> tuple[str, list[int]]:
     stripped = text.strip()
     if not stripped:
-        return text
+        return text, []
     if len(stripped) <= 3:
-        return stripped
+        return stripped, _word_weights(stripped)
 
     pre = deterministic_prewrite(text)
     try:
@@ -250,8 +277,9 @@ def _rewrite(text: str) -> str:
         out = pre
 
     cleaned = deterministic_postwrite(out)
-    # Never return empty output — that would silence the clip entirely.
-    return cleaned if cleaned else deterministic_postwrite(pre)
+    if not cleaned:
+        cleaned = deterministic_postwrite(pre)
+    return cleaned, _word_weights(cleaned)
 
 
 def main() -> None:
@@ -280,7 +308,8 @@ def main() -> None:
                 if not text.strip():
                     _emit({"ok": False, "error": "empty text"})
                     continue
-                _emit({"ok": True, "text": _rewrite(text)})
+                cleaned, weights = _rewrite(text)
+                _emit({"ok": True, "text": cleaned, "weights": weights})
             else:
                 _emit({"ok": False, "error": f"unknown cmd: {cmd}"})
         except Exception:

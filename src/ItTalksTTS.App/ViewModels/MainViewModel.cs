@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Documents;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -43,8 +44,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private double activePlaybackFraction;
     [ObservableProperty] private bool isSpeaking;
 
-    /// <summary>Words of the clip currently being spoken, for karaoke-style highlight.</summary>
-    public ObservableCollection<SpeakWord> SpeakWords { get; } = new();
+    /// <summary>Document shown in the bottom selected-text area: the spoken text with
+    /// the current word highlighted while playing, otherwise the selected queue text.</summary>
+    [ObservableProperty] private FlowDocument displayDocument = new();
 
     /// <summary>True while the active clip is loading (preprocessing or synthesizing).</summary>
     public bool ActiveItemIsLoading => IsPreprocessing || IsSynthesizing;
@@ -91,6 +93,7 @@ public partial class MainViewModel : ObservableObject
         RefreshSetupGate();
         RefreshCursorHooksStatus();
         RefreshPreprocessStatus();
+        RebuildDisplay();
         _ = RefreshVoicesInternalAsync();
     }
 
@@ -126,51 +129,124 @@ public partial class MainViewModel : ObservableObject
         });
 
     private void OnActiveSpokenTextChanged() =>
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            SpeakWords.Clear();
-            _currentWordIndex = -1;
-            var text = _svc.Playback.ActiveSpokenText ?? "";
-            if (string.IsNullOrWhiteSpace(text))
-                return;
-            foreach (var w in text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
-                SpeakWords.Add(new SpeakWord(w));
-        });
+        Application.Current.Dispatcher.Invoke(() => RebuildDisplay());
 
+    private readonly List<Run> _wordRuns = new();
     private int _currentWordIndex = -1;
+
+    private static readonly Brush HighlightBrush = new SolidColorBrush(Color.FromRgb(0x4A, 0x9A, 0x4A));
+    private static readonly Brush HighlightForeground = new SolidColorBrush(Color.FromRgb(0x0F, 0x1A, 0x0F));
+
+    /// <summary>Rebuild the bottom document: spoken text with per-word Runs while playing
+    /// (so we can highlight the current word), otherwise the selected queue text. Newlines
+    /// are preserved as LineBreaks so the original layout (paragraphs, separators) is kept.</summary>
+    private void RebuildDisplay()
+    {
+        _wordRuns.Clear();
+        _wordWeights = null;
+        _currentWordIndex = -1;
+
+        var doc = new FlowDocument
+        {
+            PagePadding = new Thickness(0),
+            Foreground = docForeground
+        };
+        var para = new Paragraph { Margin = new Thickness(0) };
+
+        if (IsSpeaking && !string.IsNullOrWhiteSpace(_svc.Playback.ActiveSpokenText))
+        {
+            // Per-word Runs (across lines) so we can highlight the current word, with
+            // LineBreaks preserving the spoken text's paragraph structure.
+            _wordWeights = _svc.Playback.ActiveSpokenWeights;
+            var text = _svc.Playback.ActiveSpokenText!;
+            foreach (var line in text.Split('\n'))
+            {
+                foreach (var w in line.Split(new[] { ' ', '\t', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var run = new Run(w + " ") { FontSize = 13 };
+                    _wordRuns.Add(run);
+                    para.Inlines.Add(run);
+                }
+                para.Inlines.Add(new LineBreak());
+            }
+        }
+        else
+        {
+            foreach (var line in SelectedQueueText.Split('\n'))
+            {
+                para.Inlines.Add(new Run(line) { FontSize = 13 });
+                para.Inlines.Add(new LineBreak());
+            }
+        }
+
+        doc.Blocks.Add(para);
+        DisplayDocument = doc;
+    }
+
+    private List<int>? _wordWeights;
+
+    partial void OnSelectedQueueTextChanged(string value)
+    {
+        if (!IsSpeaking)
+            Application.Current.Dispatcher.Invoke(() => RebuildDisplay());
+    }
+
+    partial void OnIsSpeakingChanged(bool value) =>
+        Application.Current.Dispatcher.Invoke(() => RebuildDisplay());
 
     private void OnSpeakProgress(double fraction)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
             ActivePlaybackFraction = fraction;
-            if (SpeakWords.Count == 0)
+            if (_wordRuns.Count == 0)
                 return;
-            // Map the playback fraction to a word index, weighted by word length so
-            // longer words get proportionally more time — a decent approximation
-            // without real word timestamps from the TTS engine.
+            // Per-word weights: prefer syllable counts baked by the preprocessing pass
+            // (they track spoken duration much better than character count); fall back to
+            // character length when preprocessing is off and no weights were provided.
+            var weights = _wordWeights;
             var totalLen = 0;
-            foreach (var w in SpeakWords) totalLen += w.Text.Length;
+            if (weights is { Count: > 0 } && weights.Count == _wordRuns.Count)
+            {
+                foreach (var wt in weights) totalLen += wt > 0 ? wt : 1;
+            }
+            else
+            {
+                weights = null;
+                foreach (var r in _wordRuns) totalLen += r.Text.Length;
+            }
             if (totalLen == 0)
                 return;
+
             var target = fraction * totalLen;
             var acc = 0;
-            var idx = SpeakWords.Count - 1;
-            for (var i = 0; i < SpeakWords.Count; i++)
+            var idx = _wordRuns.Count - 1;
+            for (var i = 0; i < _wordRuns.Count; i++)
             {
-                acc += SpeakWords[i].Text.Length;
+                var w = weights is null ? _wordRuns[i].Text.Length : (weights[i] > 0 ? weights[i] : 1);
+                acc += w;
                 if (target <= acc) { idx = i; break; }
             }
 
             if (idx == _currentWordIndex)
                 return;
-            if (_currentWordIndex >= 0 && _currentWordIndex < SpeakWords.Count)
-                SpeakWords[_currentWordIndex].IsCurrent = false;
+            if (_currentWordIndex >= 0 && _currentWordIndex < _wordRuns.Count)
+            {
+                _wordRuns[_currentWordIndex].Background = Brushes.Transparent;
+                _wordRuns[_currentWordIndex].Foreground = docForeground;
+                _wordRuns[_currentWordIndex].FontWeight = FontWeights.Normal;
+            }
             _currentWordIndex = idx;
-            if (idx >= 0 && idx < SpeakWords.Count)
-                SpeakWords[idx].IsCurrent = true;
+            if (idx >= 0 && idx < _wordRuns.Count)
+            {
+                _wordRuns[idx].Background = HighlightBrush;
+                _wordRuns[idx].Foreground = HighlightForeground;
+                _wordRuns[idx].FontWeight = FontWeights.SemiBold;
+            }
         });
     }
+
+    private static readonly Brush docForeground = new SolidColorBrush(Color.FromRgb(0xE4, 0xE4, 0xE4));
 
     /// <summary>True while a clip is loading (preprocessing or synthesizing) but not yet playing.</summary>
     public bool IsProcessingPhase => IsPreprocessing || IsSynthesizing;

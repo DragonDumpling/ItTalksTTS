@@ -49,6 +49,11 @@ public sealed class PlaybackService
     /// Used for word-by-word highlight during playback.</summary>
     public string? ActiveSpokenText { get; private set; }
 
+    /// <summary>Per-word duration weights (syllable counts) baked by the preprocessing
+    /// pass, aligned to <see cref="ActiveSpokenText"/>.Split(). Null when preprocessing is
+    /// off or the worker didn't supply weights — the UI then falls back to character length.</summary>
+    public List<int>? ActiveSpokenWeights { get; private set; }
+
     /// <summary>Playback progress of the current clip, 0.0–1.0 (only meaningful during Playing).</summary>
     public double PlaybackFraction { get; private set; }
 
@@ -83,6 +88,7 @@ public sealed class PlaybackService
         if (phase == PlaybackPhase.Idle)
         {
             ActiveSpokenText = null;
+            ActiveSpokenWeights = null;
             PlaybackFraction = 0;
             ActiveSpokenTextChanged?.Invoke();
             SpeakProgress?.Invoke(0.0);
@@ -266,13 +272,15 @@ public sealed class PlaybackService
                 return; // Stop — don't chain
             }
 
-            // The text actually being spoken (post-preprocess) — drives word highlighting.
-            ActiveSpokenText = prepText;
+            // The text actually being spoken (post-preprocess) plus per-word weights —
+            // drives word highlighting. The weights align to prepText's whitespace split.
+            ActiveSpokenText = prepText.Text;
+            ActiveSpokenWeights = prepText.Weights;
             ActiveSpokenTextChanged?.Invoke();
 
             SetPhase(PlaybackPhase.Synthesizing, item);
             var resp = await _app.Worker.SendAsync(
-                BuildSynthesizeRequest(prepText),
+                BuildSynthesizeRequest(prepText.Text),
                 token).ConfigureAwait(false);
 
             if (token.IsCancellationRequested)
@@ -388,29 +396,32 @@ public sealed class PlaybackService
 
     /// <summary>
     /// Rewrite text into a speech-friendly form when preprocessing is enabled. Falls
-    /// back to the original text on any failure or timeout so speech is never blocked.
-    /// The original queue text is left untouched — only what's spoken changes.
+    /// back to the original text (with null weights) on any failure or timeout so speech
+    /// is never blocked. The original queue text is left untouched — only what's spoken
+    /// changes. Returns the spoken text and per-word weights (null when unavailable).
     /// </summary>
-    private async Task<string> PreprocessTextAsync(string text, CancellationToken token)
+    private async Task<PreprocessSupervisor.PreprocessResult> PreprocessTextAsync(string text, CancellationToken token)
     {
-        if (!_app.Settings.PreprocessEnabled)
-            return text;
         if (string.IsNullOrWhiteSpace(text))
-            return text;
+            return new PreprocessSupervisor.PreprocessResult(text, null);
+        if (!_app.Settings.PreprocessEnabled)
+            return new PreprocessSupervisor.PreprocessResult(text, null);
         if (_app.Preprocess.State != PreprocessState.Running)
-            return text;
+            return new PreprocessSupervisor.PreprocessResult(text, null);
 
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             cts.CancelAfter(TimeSpan.FromSeconds(20));
             var rewritten = await _app.Preprocess.PreprocessAsync(text, cts.Token).ConfigureAwait(false);
-            return string.IsNullOrWhiteSpace(rewritten) ? text : rewritten;
+            if (string.IsNullOrWhiteSpace(rewritten.Text))
+                return new PreprocessSupervisor.PreprocessResult(text, null);
+            return rewritten;
         }
         catch (Exception ex)
         {
             _log($"Preprocess skipped (using original): {Summarize(ex.Message)}");
-            return text;
+            return new PreprocessSupervisor.PreprocessResult(text, null);
         }
     }
 

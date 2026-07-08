@@ -243,6 +243,16 @@ public sealed class WorkerSupervisor : IDisposable
                 return resp;
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Stop / per-request cancellation while waiting on the worker. The process
+            // itself is still alive and will eventually emit this request's response into
+            // the pipe, where the next SendAsync's id-matching loop discards it. Do NOT
+            // flip State to Error here — that would make every later clip bail out of
+            // PlayOneAsync as "engine down" and silently strand the whole queue on Pending.
+            LastError = "request cancelled";
+            return new WorkerResponse { Ok = false, Error = LastError };
+        }
         catch (Exception ex)
         {
             LastError = ex.Message;

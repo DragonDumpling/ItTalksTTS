@@ -172,17 +172,24 @@ public sealed class PreprocessSupervisor : IDisposable
         }
     }
 
+    /// <summary>Result of a preprocessing pass: the speech-friendly text and a per-word
+    /// duration weight (syllable count) array aligned to <see cref="Text"/>.Split() —
+    /// used by the UI to map playback progress onto the correct word for highlighting.
+    /// <c>Weights</c> is null when the worker didn't provide them (older worker / failure).</summary>
+    public sealed record PreprocessResult(string Text, List<int>? Weights);
+
     /// <summary>Rewrite <paramref name="text"/> into a speech-friendly form.</summary>
-    /// <returns>The rewritten text, or <paramref name="text"/> unchanged on any failure.</returns>
-    public async Task<string> PreprocessAsync(string text, CancellationToken cancellationToken = default)
+    /// <returns>The rewritten text plus optional per-word weights, or the input unchanged
+    /// (with null weights) on any failure so speech never blocks.</returns>
+    public async Task<PreprocessResult> PreprocessAsync(string text, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(text))
-            return text;
+            return new PreprocessResult(text, null);
 
         if (State != PreprocessState.Running)
         {
             LastError = "Preprocess worker not running.";
-            return text;
+            return new PreprocessResult(text, null);
         }
 
         await _ioLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -192,7 +199,7 @@ public sealed class PreprocessSupervisor : IDisposable
             {
                 LastError = "Preprocess worker not running.";
                 State = PreprocessState.Error;
-                return text;
+                return new PreprocessResult(text, null);
             }
 
             var id = Interlocked.Increment(ref _requestId);
@@ -207,7 +214,7 @@ public sealed class PreprocessSupervisor : IDisposable
                 {
                     LastError = "Empty response from preprocess worker.";
                     State = PreprocessState.Error;
-                    return text;
+                    return new PreprocessResult(text, null);
                 }
 
                 var resp = JsonSerializer.Deserialize<PrepResponse>(outLine, PrepJson.Options);
@@ -216,8 +223,8 @@ public sealed class PreprocessSupervisor : IDisposable
                 if (resp.Id is { } respId && respId != id)
                     continue; // stale
                 if (resp is not { Ok: true } || string.IsNullOrWhiteSpace(resp.Text))
-                    return text; // graceful fallback — never block speech
-                return resp.Text!;
+                    return new PreprocessResult(text, null); // graceful fallback — never block speech
+                return new PreprocessResult(resp.Text!, resp.Weights);
             }
         }
         catch (OperationCanceledException)
@@ -226,7 +233,7 @@ public sealed class PreprocessSupervisor : IDisposable
             // almost certainly still alive, so don't flip the whole supervisor to Error
             // (that would disable preprocessing for every subsequent clip this session).
             LastError = "preprocess request cancelled";
-            return text;
+            return new PreprocessResult(text, null);
         }
         catch (Exception ex)
         {
@@ -234,7 +241,7 @@ public sealed class PreprocessSupervisor : IDisposable
             // Only treat it as a fatal worker error if the process actually died.
             if (_process is null || _process.HasExited)
                 State = PreprocessState.Error;
-            return text;
+            return new PreprocessResult(text, null);
         }
         finally
         {
@@ -261,6 +268,7 @@ internal sealed class PrepResponse
     [JsonPropertyName("ok")] public bool Ok { get; init; }
     [JsonPropertyName("error")] public string? Error { get; init; }
     [JsonPropertyName("text")] public string? Text { get; init; }
+    [JsonPropertyName("weights")] public List<int>? Weights { get; init; }
 }
 
 internal static class PrepJson
