@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 import traceback
@@ -48,6 +49,10 @@ def _quiet(*_args, **_kwargs) -> None:
 # so we split deterministically here and concatenate in order.
 MAX_CHUNK_CHARS = 200
 CHUNK_GAP_SECONDS = 0.12
+# Structural pauses at newline boundaries between blocks (see the synthesize loop).
+# A single newline -> sentence beat; a blank line (2+ newlines) -> paragraph beat.
+SENTENCE_GAP_SECONDS = 0.20
+PARAGRAPH_GAP_SECONDS = 0.40
 
 
 def _pack(pieces, limit):
@@ -210,28 +215,46 @@ def main() -> None:
                 import numpy as np
                 import soundfile as sf
 
-                # Split deterministically and synthesize each chunk as its own batch,
-                # then concatenate in order. show_info -> no-op so F5 can't print to
-                # (the redirected) stdout. speed<1.0 slows the delivery down.
-                chunks = split_text(text) or [text]
+                # Split on newline runs so pauses land at the section/sentence
+                # boundaries the preprocessing layer chose; within a block, fall
+                # back to the clause-based splitter. Synthesize each chunk as its
+                # own batch and concatenate in order. show_info -> no-op so F5
+                # can't print to (the redirected) stdout. speed<1.0 slows delivery.
+                segments = re.split(r"(\n+)", text)
                 parts = []
                 sample_rate = None
-                gap = None
-                for chunk in chunks:
-                    wav, sr, _ = model.infer(
-                        ref_file=ref_audio,
-                        ref_text=ref_text,
-                        gen_text=chunk,
-                        speed=speed,
-                        show_info=_quiet,
-                    )
-                    sample_rate = sr
-                    wav = np.asarray(wav, dtype=np.float32)
-                    if gap is None:
-                        gap = np.zeros(int(sr * CHUNK_GAP_SECONDS), dtype=np.float32)
-                    if parts:
-                        parts.append(gap)
-                    parts.append(wav)
+                gap_cache = {}
+                first = True
+                for j, tok in enumerate(segments):
+                    if j % 2 == 1:
+                        continue  # newline separator; gap applied before next block
+                    content = tok.strip()
+                    if not content:
+                        continue
+                    chunks = split_text(content) or [content]
+                    for k, chunk in enumerate(chunks):
+                        wav, sr, _ = model.infer(
+                            ref_file=ref_audio,
+                            ref_text=ref_text,
+                            gen_text=chunk,
+                            speed=speed,
+                            show_info=_quiet,
+                        )
+                        sample_rate = sr
+                        wav = np.asarray(wav, dtype=np.float32)
+                        if not first:
+                            if k == 0:
+                                sep = segments[j - 1] if j - 1 >= 0 else ""
+                                gap_s = PARAGRAPH_GAP_SECONDS if len(sep) >= 2 else SENTENCE_GAP_SECONDS
+                            else:
+                                gap_s = CHUNK_GAP_SECONDS
+                            g = gap_cache.get(gap_s)
+                            if g is None:
+                                g = np.zeros(int(sr * gap_s), dtype=np.float32)
+                                gap_cache[gap_s] = g
+                            parts.append(g)
+                        parts.append(wav)
+                        first = False
 
                 audio = np.concatenate(parts) if parts else np.zeros(0, dtype=np.float32)
                 fd, wav_path = tempfile.mkstemp(suffix=".wav")

@@ -1,7 +1,7 @@
 # Create a GitHub release and upload release\ItTalksTTS-Setup.exe (uses git credentials / GitHub Desktop login).
 param(
-    [string]$Tag = "v0.3.0",
-    [string]$Title = "ItTalksTTS 0.3.0",
+    [string]$Tag = "v0.3.1",
+    [string]$Title = "ItTalksTTS 0.3.1",
     [string]$Owner = "DragonDumpling",
     [string]$Repo = "ItTalksTTS"
 )
@@ -35,6 +35,24 @@ $headers = @{
 }
 
 $notes = @"
+## What's new in 0.3.1
+
+- **Smarter speech preprocessing** (when preprocessing is enabled on the Voice tab):
+  - **Code blocks are summarized, not read aloud.** Fenced code is replaced with a
+    short description (or omitted) so you no longer hear braces, semicolons, and
+    statements spoken character by character.
+  - **Intelligent pause placement.** The preprocessor reasons about sentence and
+    section structure and inserts tiered pauses — a short beat between sentences,
+    a longer beat at section/topic shifts and before conclusions — so dense
+    assistant messages are easier to absorb.
+  - **Fixes for mangled technical terms:** ALL-CAPS constants like ``E2_PERSISTENCE``
+    keep their word boundaries instead of being slurred; expanded file paths and
+    ``line:line:path`` references are shortened to spoken form; em-dashes become a
+    real beat instead of vanishing; arrows are spoken as "to"; short commit hashes
+    and ``~/`` config paths are replaced with spoken labels.
+- **Update button moved to the header** next to the logo, so an available update is
+    visible immediately instead of being tucked away at the bottom of the window.
+
 ## What's new in 0.3.0
 
 - **Optional speech preprocessing** — install a small (3B) open-source LLM that runs

@@ -25,48 +25,59 @@ import traceback
 
 DEFAULT_NCTX = 4096
 
-SYSTEM_PROMPT = """You rewrite text so it sounds natural when read aloud by a text-to-speech system. The input comes from tools like coding assistants (Cursor, Claude, ChatGPT) and is written to be READ on screen, not spoken. Your job is to make it pleasant to LISTEN to.
+SYSTEM_PROMPT = """You rewrite text so it sounds natural when read aloud by a text-to-speech system. The input comes from tools like coding assistants (Cursor, Claude, ChatGPT) and is written to be READ on screen, not spoken. Your job is to make it pleasant to LISTEN to — and to pace it so the listener can absorb it.
 
 You MUST follow every rule:
 
 1. Output ONLY the rewritten text. No preamble, no labels, no quotes around it, no "Here is...". Just the words to be spoken.
 
-2. Strip everything that is visual formatting and unreadable as speech:
-   - All markdown: headings, bold (**), italics (*), inline code (`), code blocks, bullet/numbered list markers, blockquotes, tables, horizontal rules.
+2. Strip everything that is visual formatting:
+   - All markdown: headings, bold (**), italics (*), inline code (`), bullet/numbered list markers, blockquotes, tables, horizontal rules.
    - Emojis, emoticons, and decorative symbols.
    - Raw JSON, YAML, TOML, XML, HTML tags, shell prompts ($, >), and box-drawing characters.
 
-3. Write numbers, dates, times, versions, and units in SPOKEN form:
+3. NEVER transcribe source code. If a code block appears (an "[a code block]" marker, or any fenced/inline code that slipped through), either describe what it does in ONE short plain sentence, or omit it entirely when the surrounding prose already explains it. Never read statements, braces, keywords, operators, semicolons, angle brackets, or any punctuation from code. The listener cannot follow code read aloud character by character.
+
+4. Write numbers, dates, times, versions, and units in SPOKEN form:
    - 23 -> twenty-three; 1,234 -> one thousand two hundred thirty-four
    - 3/15/2026 -> March fifteenth, twenty twenty-six
    - 7:00 PM -> seven PM; v3.2 -> version three point two; 99% -> ninety-nine percent
    - $19.99 -> nineteen dollars and ninety-nine cents
 
-4. Handle technical noise the way a human narrator would:
+5. Handle technical noise the way a human narrator would:
    - URLs: replace with "a link" unless the destination is itself the point, in which case say it as components ("github dot com slash inworld dash ai").
    - API keys, tokens, hashes, base64 blobs, hex strings, UUIDs, long commit ids: REPLACE with a short spoken label such as "an API key", "a token", "a hash", "a commit id". Never read the characters.
-   - File paths: shorten to the meaningful filename, e.g. "src/services/playback dot cs" rather than the full path.
-   - Code identifiers: SPLIT camelCase/PascalCase into words AND SHORTEN to the meaningful core. Drop boilerplate suffixes (Resolver, Manager, Helper, Factory, Info, Settings, Impl, Util, Utils, Handler, Controller, Service, Adapter) when the rest of the name is already clear. Speak the result as words, not as the raw identifier.
+   - File paths: shorten to the meaningful filename only (e.g. "the build pipeline file" or "playback dot cs"), never the full path. NEVER invent or expand a path the way it was written.
+   - Line ranges like "588-602" or "588:602": say "lines 588 to 602" (in spoken form). Never read digits with colons.
+   - Code identifiers: SPLIT camelCase/PascalCase/snake_case into words AND SHORTEN to the meaningful core. Drop boilerplate suffixes (Resolver, Manager, Helper, Factory, Info, Settings, Impl, Util, Utils, Handler, Controller, Service, Adapter) when the rest of the name is already clear. Speak the result as words, not as the raw identifier.
      Examples — apply this kind of shortening:
-       - "CombatKillCardInfoResolver.TryResolveKillerNetworkPlayer(victim)" → "the resolve killer player call"
-       - "victim.LastHostileDamageSettings" → "last hostile damage"
-       - "getUserSessionTokenFromCookie(req)" → "get user session token"
-       - "AuthenticationTokenProviderImpl" → "auth token provider"
-       - "combatKillCardInfoResolver" → "the kill card resolver"
+       - "CombatKillCardInfoResolver.TryResolveKillerNetworkPlayer(victim)" -> "the resolve killer player call"
+       - "victim.LastHostileDamageSettings" -> "last hostile damage"
+       - "getUserSessionTokenFromCookie(req)" -> "get user session token"
+       - "AuthenticationTokenProviderImpl" -> "auth token provider"
+       - "combatKillCardInfoResolver" -> "the kill card resolver"
+   - ALL-CAPS constants like E2_PERSISTENCE: speak as words ("E two persistence") or as what they mean ("the persistence flag"). Never read the underscores.
+   - Arrows (-> or a right arrow): say "to" or "then" depending on context.
    - Acronyms: spell out on first use if obscure ("A.W.S., or Amazon Web Services"); say common ones as words if pronounceable (NASA) or spell them if not (A-P-I).
 
-5. Make it sound natural and a bit shorter:
+6. Pace the speech for listening. Think about where the listener needs a beat to absorb what just came:
+   - Break long, nested sentences into two or three short ones, each ending in a period.
+   - Put a comma where a natural breath falls in a long sentence.
+   - Put a single line break between sentences for a normal pause.
+   - Put a BLANK LINE (two line breaks) at every section or topic shift, after a section title, before a key conclusion or recommendation, and between enumerated items — anywhere the listener should get a longer beat.
+   - When the source has section headers, speak the title as a short sentence ending with a period, then a blank line, then the content. Example: "Recommendation. <blank line> Don't commit this change."
+
+7. Make it sound natural and a bit shorter:
    - Use contractions (don't, can't, I'm, we're).
-   - Break long, nested sentences into two or three shorter ones.
    - Drop filler phrases that don't add meaning when spoken ("It's worth noting that", "As an AI language model", "Let me know if you'd like me to", "I hope this helps").
    - Keep the meaning and all concrete facts. Never invent details, never delete information the user needs.
-   - Keep plain prose: full sentences ending in a period, question mark, or exclamation. No bullet lists, no headers.
+   - Keep plain prose: full sentences ending in a period, question mark, or exclamation. No bullet lists, no headers (other than the spoken section titles in rule 6).
 
-6. If the input is already clean, conversational, and easy to listen to, return it essentially unchanged. Do not over-edit short, natural sentences.
+8. If the input is already clean, conversational, and easy to listen to, return it essentially unchanged. Do not over-edit short, natural sentences.
 
-7. Keep the same language as the input. If the input is mostly English, output English. If it's mostly another language, rewrite in that language using the same rules.
+9. Keep the same language as the input. If the input is mostly English, output English. If it's mostly another language, rewrite in that language using the same rules.
 
-8. Preserve proper nouns and names. If a name is genuinely hard to pronounce, leave it as written — the TTS engine will attempt it."""
+10. Preserve proper nouns and names. If a name is genuinely hard to pronounce, leave it as written — the TTS engine will attempt it."""
 
 
 # ---------------------------------------------------------------------------
@@ -85,8 +96,12 @@ _UUIDISH = re.compile(
 )
 _PATHISH = re.compile(r"([A-Za-z]:[\\/]|[\\/]\S+|\.{0,2}[\\/]\S+)")
 
-# Residual markdown / formatting the model sometimes leaves behind.
-_MARKDOWN_NOISE = re.compile(r"(`{1,3}|\*{1,3}|_{1,3}|#{1,6}\s?|>\s?|\|\s?|={3,}|-{3,})")
+# Residual markdown / formatting the model sometimes leaves behind. The underscore
+# alternatives only match runs that are NOT between two word characters, so code
+# identifiers like E2_PERSISTENCE or get_user_name are preserved while markdown
+# emphasis (_word_, __bold__) and standalone rules are stripped. The ">" alt is
+# scoped to line start so it only strips blockquotes, not ">" in generics or "=>".
+_MARKDOWN_NOISE = re.compile(r"(`{1,3}|\*{1,3}|(?<![A-Za-z0-9])_{1,3}|_{1,3}(?![A-Za-z0-9])|#{1,6}\s?|(?m:^>\s?)|\|\s?|={3,}|-{3,})")
 # Emoji & wide range of pictographic / symbol characters.
 _EMOJI = re.compile(
     "["
@@ -101,6 +116,57 @@ _EMOJI = re.compile(
     "]+",
     flags=re.UNICODE,
 )
+
+# Spaced dashes used as clause separators (em-dashes are already normalized to "-"
+# by the host). A bare dash reads as nothing; a comma reads as a beat.
+_SPACED_DASH = re.compile(r"\s[—–-]\s")
+# Arrows -> spoken "to" / "then".
+_ARROW = re.compile(r"(?:->|→|⟶)")
+# Fenced code blocks. Replaced with a short marker so the model summarizes rather
+# than transcribing the code (see SYSTEM_PROMPT rule 3).
+_CODE_FENCE = re.compile(r"```[^\n]*\n.*?```", re.DOTALL)
+# Bare lowercase short commit SHAs (7-12 hex chars, must contain at least one digit
+# so we don't label dictionary words like "abcdefgh").
+_SHORT_SHA = re.compile(r"\b(?=[0-9a-f]*\d)[0-9a-f]{7,12}\b")
+# Tilde-leading config paths, e.g. ~/.e2/secrets.local.json.
+_TILDE_PATH = re.compile(r"~[/\\][^\s]+")
+# Invented "NN:NN:path" line refs the model sometimes emits.
+_LINE_REF_PATH = re.compile(r"\b(\d{1,5}):(\d{1,5}):[^\s]+")
+# Long path-like tokens in the model's output -> shorten to the basename.
+_LONG_PATH_OUT = re.compile(r"\S*[/\\]\S{8,}")
+# Strip [bracketed] attribute markers, e.g. [InitializeOnLoad] -> InitializeOnLoad.
+_BRACKETED = re.compile(r"\[([^\[\]]+)\]")
+# Residual code-like lines the model leaked (statements, braces, signatures). The
+# call-statement alt requires an "=" so a prose sentence ending in a semicolon with
+# a parenthetical doesn't get dropped.
+_CODE_LINE = re.compile(
+    r"^\s*[{}][;\s]*$"
+    r"|^\s*(static|void|var|public|private|protected|readonly|return|using|if|for|while|switch|case|class|struct|enum|function|def|import|namespace|new|async|await|try|catch|finally)\b"
+    r"|.*=.*\w+\([^)]*\).*;\s*$"
+    r"|.*\{.*\}.*"
+)
+
+
+def _tilde_path_label(m: re.Match) -> str:
+    base = re.split(r"[/\\]", m.group(0))[-1]
+    return f"the file {base}" if base else "a config file"
+
+
+def _path_basename(m: re.Match) -> str:
+    tok = m.group(0)
+    base = re.split(r"[/\\]", tok)[-1]
+    return base if base and len(base) < len(tok) else tok
+
+
+def _strip_code_lines(text: str) -> str:
+    """Drop lines that still look like source code after the model's pass."""
+    keep: list[str] = []
+    for line in text.splitlines():
+        s = line.strip()
+        if s and _CODE_LINE.match(s):
+            continue
+        keep.append(line)
+    return "\n".join(keep)
 
 
 def _looks_like_code(tok: str) -> bool:
@@ -149,9 +215,17 @@ def _classify_long_token(tok: str) -> str | None:
 
 
 def deterministic_prewrite(text: str) -> str:
-    """Replace obvious long unreadable tokens with short spoken labels BEFORE the
-    model sees the text. Code identifiers are left in place so the model can split
+    """Tidy the most readable-as-speech problems BEFORE the model sees the text:
+    replace fenced code with a marker, turn spaced dashes/arrows into beats, label
+    bare commit SHAs and tilde config paths, and replace opaque long tokens with
+    short spoken labels. Code identifiers are left in place so the model can split
     them into words and shorten them to their meaningful core."""
+    text = _CODE_FENCE.sub(" [a code block] ", text)
+    text = _SPACED_DASH.sub(", ", text)
+    text = _ARROW.sub(" to ", text)
+    text = _SHORT_SHA.sub("a commit id", text)
+    text = _TILDE_PATH.sub(_tilde_path_label, text)
+
     def sub(m: re.Match) -> str:
         label = _classify_long_token(m.group(0))
         return m.group(0) if label is None else label
@@ -160,13 +234,23 @@ def deterministic_prewrite(text: str) -> str:
 
 
 def deterministic_postwrite(text: str) -> str:
-    """Tidy the model's output: drop residual markdown/emoji, collapse whitespace."""
+    """Tidy the model's output: drop residual markdown/emoji/code, recover beats
+    from dashes/arrows, shorten invented paths and line refs, and collapse
+    whitespace. Preserves up to three line breaks so the TTS worker can tier
+    pauses by newline count (sentence vs paragraph vs major section)."""
     text = _EMOJI.sub("", text)
+    text = text.replace("[a code block]", "")
+    text = _SPACED_DASH.sub(", ", text)
+    text = _ARROW.sub(" to ", text)
+    text = _BRACKETED.sub(r"\1", text)
+    text = _LINE_REF_PATH.sub(r"lines \1 to \2", text)
+    text = _LONG_PATH_OUT.sub(_path_basename, text)
     text = _MARKDOWN_NOISE.sub("", text)
+    text = _strip_code_lines(text)
     # Collapse runs of whitespace inside lines and tidy line breaks.
     text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\s*\n\s*", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]*\n[ \t]*", "\n", text)
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
     return text.strip()
 
 

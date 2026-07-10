@@ -40,6 +40,10 @@ MAX_CHUNK_CHARS = 320
 
 # Silence inserted between batches so concatenated speech doesn't run together.
 CHUNK_GAP_SECONDS = 0.18
+# Structural pauses inserted at newline boundaries between blocks (see _synthesize).
+# A single newline -> sentence beat; a blank line (2+ newlines) -> paragraph beat.
+SENTENCE_GAP_SECONDS = 0.22
+PARAGRAPH_GAP_SECONDS = 0.45
 
 
 def split_phoneme_batches(phonemes: str, limit: int = PHONEME_BATCH) -> list[str]:
@@ -177,14 +181,11 @@ def _render(kokoro, batches: list[str], voice: str, speed: float, lang: str, is_
     return np.concatenate(audio_parts), sample_rate
 
 
-def _synthesize(kokoro, text: str, voice: str, speed: float, lang: str):
-    """Synthesize arbitrarily long text into one audio clip.
-
-    Primary path: phonemize ourselves and batch the phoneme stream under the
-    510-token cap, rendering each batch with is_phonemes=True. This avoids the
-    upstream IndexError on long punctuation-free runs. Falls back to character
-    based text chunking only if the phoneme API is unavailable.
-    """
+def _render_block(kokoro, text: str, voice: str, speed: float, lang: str):
+    """Render one newline-delimited block of text to audio. Uses the phoneme path
+    (we phonemize ourselves and batch under the 510-token cap with is_phonemes=True)
+    so Kokoro never re-splits or truncates, and falls back to text chunking only if
+    the phoneme API is unavailable."""
     try:
         phonemes = kokoro.tokenizer.phonemize(text, lang)
         batches = split_phoneme_batches(phonemes, PHONEME_BATCH)
@@ -192,12 +193,53 @@ def _synthesize(kokoro, text: str, voice: str, speed: float, lang: str):
             return None, None
         return _render(kokoro, batches, voice, speed, lang, is_phonemes=True)
     except Exception:
-        # Fall back to text-level chunking (plain create()) if anything in the
-        # phoneme path is unavailable; still better than one oversized call.
         chunks = split_text(text)
         if not chunks:
             return None, None
         return _render(kokoro, chunks, voice, speed, lang, is_phonemes=False)
+
+
+def _synthesize(kokoro, text: str, voice: str, speed: float, lang: str):
+    """Synthesize arbitrarily long text into one audio clip.
+
+    Splits on newline runs so pauses land at sentence/paragraph boundaries the
+    preprocessing layer chose, rather than at arbitrary ~500-phoneme cuts. A
+    single newline yields a SENTENCE_GAP beat; a blank line yields a longer
+    PARAGRAPH_GAP beat. Within a block, phoneme batches still get
+    CHUNK_GAP_SECONDS so run-on speech is avoided.
+    """
+    import numpy as np
+
+    # re.split with a capture group keeps the newline runs as odd-indexed tokens.
+    tokens = re.split(r"(\n+)", text)
+    audio_parts: list = []
+    sample_rate = None
+    gap_cache: dict = {}
+    first = True
+    for j, tok in enumerate(tokens):
+        if j % 2 == 1:
+            continue  # newline separator; the gap is applied before the next block
+        content = tok.strip()
+        if not content:
+            continue
+        samples, sr = _render_block(kokoro, content, voice, speed, lang)
+        if samples is None:
+            continue
+        sample_rate = sr
+        if not first:
+            sep = tokens[j - 1] if j - 1 >= 0 else ""
+            gap_s = PARAGRAPH_GAP_SECONDS if len(sep) >= 2 else SENTENCE_GAP_SECONDS
+            gap = gap_cache.get(gap_s)
+            if gap is None:
+                gap = np.zeros(int(sr * gap_s), dtype=samples.dtype)
+                gap_cache[gap_s] = gap
+            audio_parts.append(gap)
+        audio_parts.append(samples)
+        first = False
+
+    if not audio_parts:
+        return None, None
+    return np.concatenate(audio_parts), sample_rate
 
 
 def main() -> None:

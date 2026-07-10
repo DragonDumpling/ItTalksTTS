@@ -41,6 +41,7 @@
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <Image Grid.Column="0"
                Height="52"
@@ -62,6 +63,20 @@
                      FontSize="13"
                      Margin="0,2,0,0"/>
         </StackPanel>
+        <Button x:Name="UpdateAvailableButton"
+                Grid.Column="2"
+                Content="{Binding UpdateAvailableLabel}"
+                Command="{Binding ApplyUpdateCommand}"
+                Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}"
+                Background="#2E7D32"
+                Foreground="#FFFFFF"
+                BorderBrush="#1B5E20"
+                Margin="16,0,0,0"
+                Padding="14,6"
+                FontSize="12"
+                FontWeight="Bold"
+                VerticalAlignment="Center"
+                ToolTip="Download and install the latest release"/>
       </Grid>
     </Border>
 
@@ -387,14 +402,6 @@
     </TabControl>
 
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,2,0">
-      <Button x:Name="UpdateAvailableButton"
-              Content="{Binding UpdateAvailableLabel}"
-              Command="{Binding ApplyUpdateCommand}"
-              Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}"
-              Margin="0,0,10,0"
-              Padding="8,3"
-              FontSize="10"
-              ToolTip="Download and install the latest release"/>
       <TextBlock Text="{Binding BuildLabel}"
                  FontSize="9"
                  Foreground="{DynamicResource Brush.Subtitle}"
