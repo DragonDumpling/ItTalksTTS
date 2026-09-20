@@ -1,7 +1,7 @@
 # Create a GitHub release and upload release\ItTalksTTS-Setup.exe (uses git credentials / GitHub Desktop login).
 param(
-    [string]$Tag = "v0.3.1",
-    [string]$Title = "ItTalksTTS 0.3.1",
+    [string]$Tag = "v0.3.2",
+    [string]$Title = "ItTalksTTS 0.3.2",
     [string]$Owner = "DragonDumpling",
     [string]$Repo = "ItTalksTTS"
 )
@@ -35,6 +35,12 @@ $headers = @{
 }
 
 $notes = @"
+## What's new in 0.3.2
+
+- **Build stamp in the header.** The compile label now sits in the application header
+  next to the update button, so you can see which build you are running without
+  hunting in the footer.
+
 ## What's new in 0.3.1
 
 - **Smarter speech preprocessing** (when preprocessing is enabled on the Voice tab):
