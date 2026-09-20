@@ -63,20 +63,26 @@
                      FontSize="13"
                      Margin="0,2,0,0"/>
         </StackPanel>
-        <Button x:Name="UpdateAvailableButton"
-                Grid.Column="2"
-                Content="{Binding UpdateAvailableLabel}"
-                Command="{Binding ApplyUpdateCommand}"
-                Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}"
-                Background="#2E7D32"
-                Foreground="#FFFFFF"
-                BorderBrush="#1B5E20"
-                Margin="16,0,0,0"
-                Padding="14,6"
-                FontSize="12"
-                FontWeight="Bold"
-                VerticalAlignment="Center"
-                ToolTip="Download and install the latest release"/>
+        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+          <TextBlock Text="{Binding BuildLabel}"
+                     HorizontalAlignment="Right"
+                     FontSize="11"
+                     Foreground="{DynamicResource Brush.Subtitle}"
+                     ToolTip="Build stamp (changes each compile)"/>
+          <Button x:Name="UpdateAvailableButton"
+                  Content="{Binding UpdateAvailableLabel}"
+                  Command="{Binding ApplyUpdateCommand}"
+                  Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}"
+                  Background="#2E7D32"
+                  Foreground="#FFFFFF"
+                  BorderBrush="#1B5E20"
+                  Margin="16,6,0,0"
+                  Padding="14,6"
+                  FontSize="12"
+                  FontWeight="Bold"
+                  HorizontalAlignment="Right"
+                  ToolTip="Download and install the latest release"/>
+        </StackPanel>
       </Grid>
     </Border>
 
@@ -401,13 +407,5 @@
       </TabItem>
     </TabControl>
 
-    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,2,0">
-      <TextBlock Text="{Binding BuildLabel}"
-                 FontSize="9"
-                 Foreground="{DynamicResource Brush.Subtitle}"
-                 VerticalAlignment="Center"
-                 Opacity="0.65"
-                 ToolTip="Build stamp (changes each compile)"/>
-    </StackPanel>
   </DockPanel>
 </Window>
