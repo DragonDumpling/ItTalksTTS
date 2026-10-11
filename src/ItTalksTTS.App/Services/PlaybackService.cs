@@ -28,6 +28,7 @@ public sealed class PlaybackService
     private readonly object _waveLock = new();
     private WaveOutEvent? _activeWaveOut;
     private volatile bool _audioPhase;
+    private readonly PlaybackWavCache _wavCache = new(AppPaths.PlaybackCacheDir);
 
     public PlaybackService(AppServices app, Action<string> log)
     {
@@ -174,6 +175,9 @@ public sealed class PlaybackService
         }
     }
 
+    /// <summary>Drops saved clips. Called when the queue itself is cleared.</summary>
+    public void ClearCachedAudio() => _wavCache.Clear();
+
     public Task PlayFirstPendingAsync() => PlayInternalAsync(null, false);
 
     public Task PlayIdsAsync(IReadOnlyList<Guid> ids, bool allowReplay = false) =>
@@ -240,6 +244,7 @@ public sealed class PlaybackService
             return;
         if (item.State == QueueItemState.Playing)
             return;
+        var replayFromCache = item.State == QueueItemState.Played;
         if (item.State is QueueItemState.Played or QueueItemState.Error)
         {
             if (!allowReplay)
@@ -249,8 +254,22 @@ public sealed class PlaybackService
 
         if (item.State != QueueItemState.Pending)
             return;
+
+        var fingerprint = CacheFingerprint(item.Text);
+        PlaybackCacheHit? cached = null;
+        if (replayFromCache)
+        {
+            try
+            {
+                cached = _wavCache.TryGet(id, fingerprint);
+            }
+            catch (Exception ex)
+            {
+                _log($"Playback cache read failed: {Summarize(ex.Message)}");
+            }
+        }
+
         _app.Queue.SetState(id, QueueItemState.Playing);
-        SetPhase(_app.Settings.PreprocessEnabled ? PlaybackPhase.Preprocessing : PlaybackPhase.Synthesizing, item);
         string? wav = null;
         // Whether to fire ClipFinished after this clip to advance the autoplay chain.
         // Stays false on Stop/cancel and when the engine is down; true on success and on
@@ -258,6 +277,21 @@ public sealed class PlaybackService
         var advanceChain = false;
         try
         {
+            if (cached is not null)
+            {
+                ActiveSpokenText = cached.SpokenText;
+                ActiveSpokenWeights = cached.Weights;
+                ActiveSpokenTextChanged?.Invoke();
+                SetPhase(PlaybackPhase.Playing, item);
+                _log("Replaying cached audio.");
+                await PlayWavFileAsync(cached.WavPath, token).ConfigureAwait(false);
+                _app.Queue.SetState(id, QueueItemState.Played);
+                _lastCompletedId = id;
+                advanceChain = !_suppressAutoplay;
+                return;
+            }
+
+            SetPhase(_app.Settings.PreprocessEnabled ? PlaybackPhase.Preprocessing : PlaybackPhase.Synthesizing, item);
             if (_app.Worker.State != TtsServiceState.Running)
             {
                 _app.Queue.SetState(id, QueueItemState.Pending, null);
@@ -302,6 +336,15 @@ public sealed class PlaybackService
             wav = resp.Wav;
             SetPhase(PlaybackPhase.Playing, item);
             await PlayWavFileAsync(wav, token).ConfigureAwait(false);
+            try
+            {
+                _wavCache.Store(id, wav, prepText.Text, prepText.Weights, fingerprint);
+            }
+            catch (Exception ex)
+            {
+                _log($"Playback cache store failed: {Summarize(ex.Message)}");
+            }
+
             _app.Queue.SetState(id, QueueItemState.Played);
             _lastCompletedId = id;
             advanceChain = !_suppressAutoplay;
@@ -340,6 +383,19 @@ public sealed class PlaybackService
             if (advanceChain)
                 ClipFinished?.Invoke();
         }
+    }
+
+    private string CacheFingerprint(string queueText)
+    {
+        var settings = _app.Settings;
+        return PlaybackWavCache.BuildFingerprint(
+            queueText,
+            settings.SelectedModel,
+            settings.SelectedVoice,
+            settings.F5RefAudioPath,
+            settings.F5RefText,
+            settings.PreprocessEnabled,
+            settings.PreprocessModelId);
     }
 
     private WorkerRequest BuildSynthesizeRequest(string text)

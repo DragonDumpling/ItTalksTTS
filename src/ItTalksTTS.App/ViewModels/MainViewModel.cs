@@ -541,6 +541,7 @@ public partial class MainViewModel : ObservableObject
     {
         await _svc.Playback.StopAsync().ConfigureAwait(true);
         _svc.Queue.Clear();
+        _svc.Playback.ClearCachedAudio();
     }
 
     [RelayCommand]

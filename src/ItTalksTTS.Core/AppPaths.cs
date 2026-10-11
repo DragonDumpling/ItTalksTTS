@@ -33,6 +33,9 @@ public static class AppPaths
 
     public static string LogFilePath => Path.Combine(LogsDir, "app.log");
 
+    /// <summary>Last few synthesized clips, so a just-played queue row can be replayed.</summary>
+    public static string PlaybackCacheDir => Path.Combine(Root, "playback-cache");
+
     /// <summary>Marker written into a packages dir once pip install completes (embedded-Python path).</summary>
     public const string PackagesReadyMarker = ".ittalks-ready";
 
