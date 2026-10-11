@@ -1,7 +1,7 @@
 # Create a GitHub release and upload release\ItTalksTTS-Setup.exe (uses git credentials / GitHub Desktop login).
 param(
-    [string]$Tag = "v0.3.2",
-    [string]$Title = "ItTalksTTS 0.3.2",
+    [string]$Tag = "v0.3.3",
+    [string]$Title = "ItTalksTTS 0.3.3",
     [string]$Owner = "DragonDumpling",
     [string]$Repo = "ItTalksTTS"
 )
@@ -35,6 +35,14 @@ $headers = @{
 }
 
 $notes = @"
+## What's new in 0.3.3
+
+- **Replay a clip you just heard.** Play selected on a queue row that already
+  played uses the saved audio instead of running preprocessing and synthesis
+  again. The last five clips are kept; a sixth drops the oldest. Changing voice,
+  engine, reference clip, or preprocess settings speaks the row fresh. Clearing
+  the queue drops the saved clips.
+
 ## What's new in 0.3.2
 
 - **Build stamp in the header.** The compile label now sits in the application header
