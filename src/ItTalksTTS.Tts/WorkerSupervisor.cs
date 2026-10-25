@@ -31,6 +31,13 @@ public sealed class WorkerSupervisor : IDisposable
     public TtsServiceState State { get; private set; } = TtsServiceState.Stopped;
     public string? LastError { get; private set; }
 
+    /// <summary>The process may still be up, but it is not usable (model missing, ping failed).</summary>
+    public void ReportFailed(string error)
+    {
+        LastError = error;
+        State = TtsServiceState.Error;
+    }
+
     /// <summary>The engine the most recent StartAsync launched (or would launch).</summary>
     public EngineDescriptor ActiveEngine => _activeEngine();
 

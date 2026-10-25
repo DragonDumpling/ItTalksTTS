@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject
     private readonly Window _owner;
     private readonly UpdateCheckService _updateCheck = new();
     private readonly AppUpdateService _appUpdate = new();
+    private string? _engineKey;
 
     public ObservableCollection<string> Voices { get; } = new();
 
@@ -63,6 +64,8 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private bool setupRequired;
 
+    [ObservableProperty] private string setupRequiredMessage = "";
+
     [ObservableProperty] private bool isKokoroRunning;
 
     [ObservableProperty] private string cursorHooksStatus = "";
@@ -85,6 +88,7 @@ public partial class MainViewModel : ObservableObject
     {
         _owner = owner;
         _svc = svc;
+        _engineKey = Settings.SelectedModel;
         _svc.Playback.ClipFinished += OnClipFinished;
         _svc.Playback.PlaybackStateChanged += OnPlaybackStateChanged;
         _svc.Playback.PhaseChanged += OnPhaseChanged;
@@ -297,7 +301,7 @@ public partial class MainViewModel : ObservableObject
 
         if (_svc.Worker.State != TtsServiceState.Running)
         {
-            _svc.Log.Append("Test voice: start Kokoro first.");
+            _svc.Log.Append("Test voice: start the engine first.");
             return;
         }
 
@@ -453,10 +457,18 @@ public partial class MainViewModel : ObservableObject
     {
         // Persist the active engine + its voice settings so next launch is just "Start engine".
         _svc.PersistSettings();
+        RefreshSetupGate();
+        if (SetupRequired)
+        {
+            _svc.Log.Append($"{ActiveEngine.DisplayName} is not installed. Use Setup / Repair on the Voice tab.");
+            RefreshVoiceStatus();
+            return;
+        }
+
         await _svc.Worker.StartAsync().ConfigureAwait(true);
+        await RefreshVoicesInternalAsync().ConfigureAwait(true);
         IsKokoroRunning = _svc.Worker.State == TtsServiceState.Running;
         RefreshVoiceStatus();
-        await RefreshVoicesInternalAsync().ConfigureAwait(true);
         if (IsKokoroRunning && Settings.Autoplay && !_svc.Playback.IsPlaying)
             await _svc.Playback.TryAutoplayChainAsync().ConfigureAwait(true);
     }
@@ -479,6 +491,8 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Called when the Model dropdown changes: stop the old engine, swap the voice UI, re-gate setup.</summary>
     public async Task OnEngineChangedAsync()
     {
+        EngineVoiceSelection.ApplyEngineSwitch(Settings, _engineKey, Settings.SelectedModel);
+        _engineKey = Settings.SelectedModel;
         _svc.PersistSettings();
         await _svc.Worker.StopAsync().ConfigureAwait(true);
         IsKokoroRunning = false;
@@ -605,18 +619,9 @@ public partial class MainViewModel : ObservableObject
     private void RefreshSetupGate()
     {
         var engine = ActiveEngine;
-        if (engine.Id == TtsEngineId.KokoroOnnx)
-        {
-            var hasModel = File.Exists(AppPaths.KokoroOnnx) && File.Exists(AppPaths.KokoroVoices);
-            var hasWorker = File.Exists(_svc.Worker.ResolveWorkerScript(engine));
-            var hasPython = File.Exists(Path.Combine(AppPaths.PythonVenv, "Scripts", "python.exe"))
-                || File.Exists(Path.Combine(AppPaths.PythonPackages, ".ittalks-ready"));
-            SetupRequired = !(hasModel && hasWorker && hasPython);
-        }
-        else
-        {
-            SetupRequired = !EngineRegistry.IsInstalled(engine);
-        }
+        var hasWorker = File.Exists(_svc.Worker.ResolveWorkerScript(engine));
+        SetupRequired = !hasWorker || !EngineRegistry.IsUsable(engine);
+        SetupRequiredMessage = SetupRequired ? $"{engine.DisplayName} is not installed. " : "";
     }
 
     public async Task RunFirstLaunchSetupIfNeededAsync()
@@ -698,7 +703,13 @@ public partial class MainViewModel : ObservableObject
         if (_svc.Worker.State != TtsServiceState.Running)
             return;
         var r = await _svc.Worker.SendAsync(new WorkerRequest { Cmd = "ping" }).ConfigureAwait(true);
-        if (r?.Voices is not { Count: > 0 })
+        if (r is not { Ok: true })
+        {
+            _svc.Worker.ReportFailed(string.IsNullOrWhiteSpace(r?.Error) ? "Engine did not become ready." : r!.Error!);
+            return;
+        }
+
+        if (r.Voices is not { Count: > 0 })
             return;
         Application.Current.Dispatcher.Invoke(() =>
         {

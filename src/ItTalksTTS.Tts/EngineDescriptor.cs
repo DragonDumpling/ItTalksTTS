@@ -5,13 +5,14 @@ namespace ItTalksTTS.Tts;
 public enum TtsEngineId
 {
     KokoroOnnx,
+    Phonon31m,
     F5Tts,
 }
 
 /// <summary>How a given engine selects its voice — drives which UI panel is shown.</summary>
 public enum VoiceInputMode
 {
-    /// <summary>A fixed list of named voices (Kokoro).</summary>
+    /// <summary>A fixed list of named voices (Kokoro, Phonon).</summary>
     NamedVoices,
 
     /// <summary>Zero-shot cloning from a reference audio clip + its transcript (F5-TTS).</summary>
@@ -34,6 +35,9 @@ public sealed record EngineDescriptor
 
     public required string DisplayName { get; init; }
 
+    /// <summary>Shown at the top of the setup window for this engine.</summary>
+    public required string SetupSummary { get; init; }
+
     /// <summary>Worker script filename deployed under <see cref="AppPaths.WorkerDir"/>.</summary>
     public required string WorkerScript { get; init; }
 
@@ -44,6 +48,9 @@ public sealed record EngineDescriptor
     public required bool NeedsTorch { get; init; }
 
     public required VoiceInputMode VoiceMode { get; init; }
+
+    /// <summary>Voice selected when this engine has no remembered voice. Empty when the engine doesn't use named voices.</summary>
+    public string DefaultVoice { get; init; } = "";
 
     /// <summary>Dedicated virtual-env dir (preferred interpreter when present).</summary>
     public required string VenvDir { get; init; }

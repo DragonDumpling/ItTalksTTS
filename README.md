@@ -6,7 +6,7 @@
 
 Windows desktop app that bridges **[Kokoro](https://github.com/thewh1teagle/kokoro-onnx)** text-to-speech, a **playback queue (The Q)**, a **local HTTP API**, and optional **Cursor** hooks / MCP.
 
-TLDR: This uses the open-source Kokoro text-to-speech engine to read text aloud locally — free, open source, and private. Queue Agent replies from Cursor hooks, paste anything into **The Paste**, or POST to the local API.
+TLDR: This reads text aloud locally with open-source speech — Kokoro by default, plus Phonon 31m and F5-TTS. Queue Agent replies from Cursor hooks, paste anything into **The Paste**, or POST to the local API.
 
 ## See it in action
 
@@ -44,7 +44,7 @@ GitHub does not play videos from repo file paths in the README. **Click the prev
 
 **First launch:** the app opens a one-time setup window automatically. It installs Kokoro’s Python pieces and downloads voice models over the internet (often a few minutes). You do not need to install Python or .NET separately when using the setup EXE.
 
-**Then:** use the app — paste or enqueue text, press **Play** in **The Q** (or turn on **Autoplay**). On the **Voice** tab, **Start Kokoro** if you want speech right away after setup.
+**Then:** use the app — paste or enqueue text, press **Play** in **The Q** (or turn on **Autoplay**). On the **Voice** tab, **Start engine** if you want speech right away after setup.
 
 | You want… | Do this |
 |-----------|---------|
@@ -72,7 +72,13 @@ Switch engines from the **Model** dropdown on the Voice tab:
 | Engine | Voice selection | Install |
 |--------|-----------------|---------|
 | **Kokoro (ONNX)** | Named voices (`af_sarah`, …) | Bundled — lightweight, CPU, the default |
+| **Phonon 31m** | Named English voices (Easton, Zoey, …) | On-demand via **Setup / Repair** — CPU, no PyTorch, ~65 MB |
 | **F5-TTS** | Zero-shot **voice cloning** from a reference clip + its transcript | On-demand via **Setup / Repair** |
+
+**Phonon 31m notes:**
+- [Gradium Phonon 31m](https://huggingface.co/gradium/phonon-31m-en) (Apache 2.0) is an on-device English model. Pick it from the **Model** dropdown, then run **Setup / Repair**. Setup installs the `ptts` runtime and downloads the q8 weights.
+- The Voice dropdown lists the English catalog (US, UK, and character voices). The first time you speak with a voice, that voice file is downloaded into the engine's model folder. Kokoro's voice is remembered separately, so switching back restores it.
+- It speaks English. Numbers and symbols are read out for you. Each engine keeps its own Python environment under `engines\`.
 
 **F5-TTS notes:**
 - It clones a voice from a short (3–12s) **reference WAV/FLAC** plus the **exact transcript** of that clip. Leave both blank to use the bundled default voice.
@@ -130,7 +136,7 @@ Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip th
 |--------|------|
 | `ItTalksTTS.App` | WPF UI, playback, API host |
 | `ItTalksTTS.Core` | Queue, persistence, filters, encoding |
-| `ItTalksTTS.Tts` | TTS engines (Kokoro, F5-TTS), worker supervisor & setup |
+| `ItTalksTTS.Tts` | TTS engines (Kokoro, Phonon 31m, F5-TTS), worker supervisor & setup |
 | `ItTalksTTS.Api` | Local HTTP API |
 | `ItTalksTTS.HookEnqueue` | Cursor hook → API |
 | `ItTalksTTS.McpServer` | MCP stdio server |
@@ -145,7 +151,7 @@ Output: **`release\ItTalksTTS-Setup.exe`** plus **`release\README.txt`**. Zip th
 | `%LocalAppData%\ItTalksTTS\models\` | Kokoro ONNX + voices |
 | `%LocalAppData%\ItTalksTTS\queue.json` | Saved queue |
 | `%LocalAppData%\ItTalksTTS\kokoro_worker\` | Deployed TTS worker scripts + F5 default reference (refreshed on update) |
-| `%LocalAppData%\ItTalksTTS\engines\<id>\` | Per-engine Python env + models (e.g. F5-TTS) |
+| `%LocalAppData%\ItTalksTTS\engines\<id>\` | Per-engine Python env + models (Phonon 31m, F5-TTS) |
 | `%LocalAppData%\ItTalksTTS\logs\app.log` | Runtime log; rotates to `app.1.log`/`app.2.log` at ~1 MB each |
 
 The log file persists after the app closes, so you can inspect it to diagnose a past

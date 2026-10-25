@@ -1,7 +1,7 @@
 # Create a GitHub release and upload release\ItTalksTTS-Setup.exe (uses git credentials / GitHub Desktop login).
 param(
-    [string]$Tag = "v0.3.3",
-    [string]$Title = "ItTalksTTS 0.3.3",
+    [string]$Tag = "v0.3.4",
+    [string]$Title = "ItTalksTTS 0.3.4",
     [string]$Owner = "DragonDumpling",
     [string]$Repo = "ItTalksTTS"
 )
@@ -35,6 +35,12 @@ $headers = @{
 }
 
 $notes = @"
+## What's new in 0.3.4
+
+- **Phonon 31m** is a new local English voice on the Voice tab. Pick **Phonon31m**, run **Setup / Repair** (installs the ptts runtime, no PyTorch, and downloads about 65 MB of weights), then **Start engine**. The default voice is Easton; the list is the English catalog, including UK and character voices. Kokoro stays the default, and each engine keeps its own voice when you switch.
+- The setup window names the engine you selected. After a finished install the button reads **Run setup again**.
+- **Start engine** stays stopped until that engine is installed, instead of showing Ready when only a Python process has launched.
+
 ## What's new in 0.3.3
 
 - **Replay a clip you just heard.** Play selected on a queue row that already
@@ -88,6 +94,7 @@ $notes = @"
 
 - Download **ItTalksTTS-Setup.exe** and run the setup
 - First launch downloads Kokoro voice models (internet required)
+- **Phonon 31m** is optional: pick it on the Voice tab, then run Setup / Repair (about 65 MB; the installer includes Python)
 - **F5-TTS** is optional: pick it on the Voice tab, then run Setup / Repair (needs system Python 3.10-3.12)
 - **Speech preprocessing** is optional: enable it on the Voice tab, then Install (needs system Python 3.10-3.13; downloads a ~2GB GGUF model on first setup)
 - **Cursor:** user hooks install automatically — restart Cursor, use Agent mode in any project

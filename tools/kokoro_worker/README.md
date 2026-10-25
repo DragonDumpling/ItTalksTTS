@@ -12,3 +12,7 @@ python worker.py
 ```
 
 Send JSON lines on stdin; read JSON lines from stdout.
+
+## Phonon 31m worker
+
+`phonon_worker.py` speaks with Gradium Phonon 31m (`ptts`, no PyTorch). Setup installs `phonon_requirements.txt` into `engines\phonon` and downloads the q8 weights on first run. Same JSON commands as Kokoro: `ping` and `synthesize`.

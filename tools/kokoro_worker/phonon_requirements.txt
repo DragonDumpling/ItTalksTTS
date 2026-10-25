@@ -1,0 +1,2 @@
+# Phonon 31m. Rust runtime (no PyTorch). q8 weights download on first setup (~65 MB).
+ptts>=0.4.2

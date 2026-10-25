@@ -15,6 +15,10 @@ public partial class SetupWindow : Window
     {
         InitializeComponent();
         _svc = svc;
+        var engine = EngineRegistry.FromKey(_svc.Settings.SelectedModel);
+        Title = $"ItTalksTTS — {engine.DisplayName} setup";
+        Intro.Text = engine.SetupSummary;
+        RunBtn.Content = EngineRegistry.SetupButtonText(EngineRegistry.IsUsable(engine));
     }
 
     protected override async void OnContentRendered(EventArgs e)
@@ -58,6 +62,7 @@ public partial class SetupWindow : Window
             await setup.InstallEngineAsync(engine, progress, CancellationToken.None).ConfigureAwait(true);
             Status.Text = $"{engine.DisplayName} setup complete. You can close this window.";
             Progress.Value = 100;
+            RunBtn.Content = EngineRegistry.SetupButtonText(alreadyInstalled: true);
             SfxService.PlaySuccess();
         }
         catch (Exception ex)

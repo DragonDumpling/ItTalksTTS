@@ -8,7 +8,11 @@ public class EngineRegistryTests
     public void FromKey_resolves_known_engines()
     {
         Assert.Equal(TtsEngineId.KokoroOnnx, EngineRegistry.FromKey("KokoroOnnx").Id);
+        Assert.Equal(TtsEngineId.Phonon31m, EngineRegistry.FromKey("Phonon31m").Id);
         Assert.Equal(TtsEngineId.F5Tts, EngineRegistry.FromKey("F5TTS").Id);
+        Assert.False(EngineRegistry.TryGet("nope", out _));
+        Assert.True(EngineRegistry.TryGet("phonon31m", out var phonon));
+        Assert.Equal(TtsEngineId.Phonon31m, phonon.Id);
     }
 
     [Fact]
@@ -29,8 +33,25 @@ public class EngineRegistryTests
     public void Voice_modes_match_engine_paradigms()
     {
         Assert.Equal(VoiceInputMode.NamedVoices, EngineRegistry.Kokoro.VoiceMode);
+        Assert.Equal(VoiceInputMode.NamedVoices, EngineRegistry.Phonon.VoiceMode);
         Assert.Equal(VoiceInputMode.ReferenceAudio, EngineRegistry.F5.VoiceMode);
+        Assert.Equal("af_sarah", EngineRegistry.Kokoro.DefaultVoice);
+        Assert.Equal("Easton", EngineRegistry.Phonon.DefaultVoice);
         Assert.True(EngineRegistry.F5.NeedsTorch);
         Assert.False(EngineRegistry.Kokoro.NeedsTorch);
+        Assert.False(EngineRegistry.Phonon.NeedsTorch);
+        Assert.NotEqual(EngineRegistry.Kokoro.VenvDir, EngineRegistry.Phonon.VenvDir);
+        Assert.NotEqual(EngineRegistry.F5.ModelsDir, EngineRegistry.Phonon.ModelsDir);
+    }
+
+    [Fact]
+    public void Setup_copy_names_the_selected_engine()
+    {
+        Assert.Contains("Phonon", EngineRegistry.Phonon.SetupSummary);
+        Assert.DoesNotContain("Kokoro", EngineRegistry.Phonon.SetupSummary);
+        Assert.Contains("Kokoro", EngineRegistry.Kokoro.SetupSummary);
+        Assert.Contains("F5-TTS", EngineRegistry.F5.SetupSummary);
+        Assert.Equal("Run setup", EngineRegistry.SetupButtonText(alreadyInstalled: false));
+        Assert.Equal("Run setup again", EngineRegistry.SetupButtonText(alreadyInstalled: true));
     }
 }

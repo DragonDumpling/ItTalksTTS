@@ -46,7 +46,7 @@ Hooks apply to **all projects** on this machine (user hooks). Project-only hooks
 
 - **Autoplay off** (default for many users): hooks enqueue only; press **Play** in The Q.
 - **Autoplay on**: next pending item may start when idle.
-- **Kokoro** must be started on the Voice tab to hear speech.
+- The selected engine (Kokoro, Phonon, or F5-TTS) must be started on the Voice tab to hear speech.
 
 ---
 

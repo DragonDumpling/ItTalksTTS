@@ -11,6 +11,12 @@ public partial class AppSettingsModel : ObservableObject
 
     [ObservableProperty] private string selectedVoice = "af_sarah";
 
+    /// <summary>
+    /// Last voice chosen for each engine settings key. Kokoro and Phonon both use
+    /// <see cref="SelectedVoice"/>, and their names don't overlap.
+    /// </summary>
+    public Dictionary<string, string> EngineVoices { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     // F5-TTS voice cloning: reference clip + its transcript. Empty = use the bundled default.
     [ObservableProperty] private string f5RefAudioPath = "";
 

@@ -58,7 +58,7 @@
         </Image>
         <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center">
           <TextBlock Text="ItTalksTTS" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource Brush.Text}"/>
-          <TextBlock Text="TTS bridge for Kokoro &amp; F5-TTS, Cursor hooks &amp; MCP"
+          <TextBlock Text="TTS bridge for Kokoro, Phonon &amp; F5-TTS, Cursor hooks &amp; MCP"
                      Foreground="{DynamicResource Brush.Subtitle}"
                      FontSize="13"
                      Margin="0,2,0,0"/>
@@ -99,17 +99,18 @@
           </Grid.RowDefinitions>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
             <TextBlock Text="Model" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <controls:ThemedComboBox x:Name="ModelCombo" Width="160" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+            <controls:ThemedComboBox x:Name="ModelCombo" Width="168" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
                                    SelectedValue="{Binding Settings.SelectedModel}" SelectedValuePath="Content"
                                    IsEditable="True" IsReadOnly="True" SelectionChanged="Model_SelectionChanged">
               <ComboBoxItem Content="KokoroOnnx"/>
+              <ComboBoxItem Content="Phonon31m"/>
               <ComboBoxItem Content="F5TTS"/>
             </controls:ThemedComboBox>
 
             <!-- Kokoro: named voice picker -->
             <StackPanel Orientation="Horizontal" Visibility="{Binding IsNamedVoiceMode, Converter={StaticResource BoolToVis}}">
               <TextBlock Text="Voice" VerticalAlignment="Center" Margin="16,0,8,0"/>
-              <controls:ThemedComboBox Width="180" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
+              <controls:ThemedComboBox Width="220" Background="#2A2A2E" Foreground="#F5F5F5" BorderBrush="#5A5A60"
                                        ItemsSource="{Binding Voices}" Text="{Binding Settings.SelectedVoice, UpdateSourceTrigger=PropertyChanged}" IsEditable="True"/>
             </StackPanel>
 
@@ -235,7 +236,7 @@
           </Border>
           <Border Grid.Row="4" Visibility="{Binding SetupRequired, Converter={StaticResource BoolToVis}}" Background="#2D2D1F" Padding="10" CornerRadius="4" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="Models or worker missing. " VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding SetupRequiredMessage}" VerticalAlignment="Center"/>
               <Button Content="Run guided setup" Command="{Binding OpenSetupCommand}" Padding="10,4"/>
             </StackPanel>
           </Border>

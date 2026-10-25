@@ -37,10 +37,24 @@ public sealed class KokoroSetupService
         progress?.Report(("Done.", 1.0));
     }
 
+    /// <summary>Loads Phonon 31m once so setup caches the q8 weights and the default voice.</summary>
+    private const string PhononWarmupScript = """
+        import os
+        import ptts
+        model = os.environ.get("PHONON_MODEL") or ptts.DEFAULT_MODEL
+        lang = os.environ.get("PHONON_LANG") or "en"
+        quant = os.environ.get("PHONON_QUANT") or "q8"
+        device = os.environ.get("PHONON_DEVICE") or "cpu"
+        voice = os.environ.get("PHONON_VOICE") or "Easton"
+        tts = ptts.TTS(model, lang=lang, quant=quant, device=device)
+        pcm = tts.synth("Ready.", voice=voice)
+        print("phonon ready", tts.sample_rate, tts.quant, getattr(pcm, "shape", None))
+        """;
+
     /// <summary>
-    /// Install/repair a specific engine. Kokoro routes to the existing self-contained
-    /// flow; torch engines (F5-TTS) get their own venv with CUDA/CPU torch wheels and
-    /// the engine's requirements, then pre-download their model.
+    /// Install/repair a specific engine. Kokoro keeps its shared environment.
+    /// Phonon gets an isolated env and the ptts runtime (no PyTorch), then downloads
+    /// its q8 weights. Torch engines (F5-TTS) get CUDA/CPU torch wheels first.
     /// </summary>
     public async Task InstallEngineAsync(
         EngineDescriptor engine,
@@ -50,13 +64,19 @@ public sealed class KokoroSetupService
         AppPaths.EnsureRoot();
         DeployWorkerFiles();
 
-        if (!engine.NeedsTorch)
+        if (engine.Id == TtsEngineId.KokoroOnnx)
         {
             await RunSetupAsync(progress, cancellationToken).ConfigureAwait(false);
             return;
         }
 
         Directory.CreateDirectory(engine.ModelsDir);
+
+        if (!engine.NeedsTorch)
+        {
+            await InstallPipEngineAsync(engine, progress, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         progress?.Report(("Preparing Python environment…", 0.05));
         var venvPython = await EnsureEngineVenvAsync(engine, cancellationToken).ConfigureAwait(false);
@@ -88,6 +108,71 @@ public sealed class KokoroSetupService
         progress?.Report(("Done.", 1.0));
     }
 
+    /// <summary>
+    /// Lightweight engine (Phonon): pip install into the bundled Python's target dir
+    /// when the installer shipped Python, otherwise a dedicated venv. Then run the
+    /// engine's warmup so weights are on disk before the first clip.
+    /// </summary>
+    private async Task InstallPipEngineAsync(
+        EngineDescriptor engine,
+        IProgress<(string step, double? fraction)>? progress,
+        CancellationToken cancellationToken)
+    {
+        var req = Path.Combine(AppPaths.WorkerDir, engine.RequirementsFile);
+        if (!File.Exists(req))
+            throw new InvalidOperationException($"Missing {req}");
+
+        progress?.Report(("Preparing Python environment…", 0.08));
+        var (python, env) = await EnsurePipRuntimeAsync(engine, cancellationToken).ConfigureAwait(false);
+
+        progress?.Report(($"Installing {engine.DisplayName}…", 0.35));
+        if (env.ContainsKey("PYTHONPATH"))
+        {
+            await PipInstallAsync(python, req, engine.PackagesDir, cancellationToken).ConfigureAwait(false);
+            Directory.CreateDirectory(engine.PackagesDir);
+            File.WriteAllText(Path.Combine(engine.PackagesDir, PackagesReadyMarker), DateTime.UtcNow.ToString("O"));
+        }
+        else
+        {
+            await RunPythonAsync(python, new[] { "-m", "pip", "install", "-r", req }, env, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        progress?.Report(($"Downloading {engine.DisplayName} weights…", 0.7));
+        var warmup = engine.Id == TtsEngineId.Phonon31m
+            ? PhononWarmupScript
+            : "print('ready')";
+        await RunPythonAsync(python, new[] { "-c", warmup }, env, cancellationToken).ConfigureAwait(false);
+
+        File.WriteAllText(engine.ReadyMarkerPath, DateTime.UtcNow.ToString("O"));
+        progress?.Report(("Done.", 1.0));
+    }
+
+    /// <summary>
+    /// Interpreter plus env for a pip engine. PYTHONPATH is set only for the
+    /// bundled embeddable Python, which installs with pip --target.
+    /// </summary>
+    private async Task<(string Python, Dictionary<string, string> Env)> EnsurePipRuntimeAsync(
+        EngineDescriptor engine,
+        CancellationToken cancellationToken)
+    {
+        var env = new Dictionary<string, string>(engine.EnvVars);
+        var venvPython = AppPaths.VenvPython(engine.VenvDir);
+        if (File.Exists(venvPython))
+            return (venvPython, env);
+
+        if (File.Exists(AppPaths.BundledPythonExe))
+        {
+            await EnsureBundledPipAsync(cancellationToken).ConfigureAwait(false);
+            Directory.CreateDirectory(engine.PackagesDir);
+            env["PYTHONPATH"] = engine.PackagesDir;
+            return (AppPaths.BundledPythonExe, env);
+        }
+
+        var created = await EnsureEngineVenvAsync(engine, cancellationToken).ConfigureAwait(false);
+        return (created, env);
+    }
+
     private async Task<string> EnsureEngineVenvAsync(EngineDescriptor engine, CancellationToken cancellationToken)
     {
         var venvPython = AppPaths.VenvPython(engine.VenvDir);
@@ -96,7 +181,7 @@ public sealed class KokoroSetupService
 
         var basePython = FindSystemPython()
             ?? throw new InvalidOperationException(
-                "F5-TTS needs a system Python 3.10–3.12. Install it from https://python.org "
+                $"{engine.DisplayName} needs a system Python 3.10–3.12. Install it from https://python.org "
                 + "(tick \"Add python.exe to PATH\"), then run Setup again.");
 
         Directory.CreateDirectory(Path.GetDirectoryName(engine.VenvDir)!);
